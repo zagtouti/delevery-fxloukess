@@ -232,6 +232,10 @@
           <div class="text-xs text-gray-400 mt-1">À verser</div>
         </div>
       </div>
+      <div class="bg-white border border-gray-100 rounded-xl p-5 mt-4">
+        <h3 class="text-sm font-medium text-gray-900 mb-4">Soldes expéditeurs</h3>
+        <div id="seller-balances"><div class="text-sm text-gray-400 text-center py-4">Chargement...</div></div>
+      </div>
     </div>
 
     <!-- ALERTS PAGE -->
@@ -467,7 +471,7 @@ async function loadDashboard() {
             </div>
             <span class="ml-auto text-xs px-2 py-1 rounded-full ${d.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${d.is_active ? 'Actif' : 'Inactif'}</span>
           </div>
-          <div class="grid grid-cols-2 gap-2 text-xs">
+          <div class="grid grid-cols-2 gap-2 text-xs mb-3">
             <div class="bg-gray-50 rounded-lg p-2">
               <div class="text-gray-400">Wilaya</div>
               <div class="font-medium text-gray-700">${d.wilaya}</div>
@@ -476,9 +480,25 @@ async function loadDashboard() {
               <div class="text-gray-400">Cash en main</div>
               <div class="font-medium text-red-600">${(d.cash_on_hand||0).toLocaleString()} DZD</div>
             </div>
+            <div class="bg-orange-50 rounded-lg p-2">
+              <div class="text-gray-400">En livraison</div>
+              <div class="font-medium text-orange-600">${d.packages_out || 0}</div>
+            </div>
+            <div class="bg-green-50 rounded-lg p-2">
+              <div class="text-gray-400">Livrés auj.</div>
+              <div class="font-medium text-green-600">${d.delivered_today || 0}</div>
+            </div>
           </div>
+          <button onclick="toggleDriver('${d.id}')" class="w-full border text-sm py-1.5 rounded-lg ${d.is_active ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50'}">
+            ${d.is_active ? 'Désactiver' : 'Activer'}
+          </button>
         </div>
       `).join('')
+    }
+
+    async function toggleDriver(id) {
+      await api(`/api/drivers/${id}/toggle`, { method: 'PATCH' })
+      loadDrivers()
     }
 
     async function loadSellers() {
@@ -496,18 +516,25 @@ async function loadDashboard() {
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Nom</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Téléphone</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Wilaya</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Colis</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Solde</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Statut</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
               ${data.map(s => `
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-3 font-medium text-gray-900">${s.full_name}</td>
+                  <td class="px-4 py-3 font-medium text-gray-900">${s.full_name}${s.business_name?'<div class="text-xs text-gray-400">'+s.business_name+'</div>':''}</td>
                   <td class="px-4 py-3 text-gray-600">${s.phone}</td>
                   <td class="px-4 py-3 text-gray-600">${s.wilaya}</td>
-                  <td class="px-4 py-3 font-medium ${s.balance >= 0 ? 'text-green-600' : 'text-red-500'}">${(s.balance||0).toLocaleString()} DZD</td>
+                  <td class="px-4 py-3 text-gray-500">${s.total_packages||0} / <span class="text-green-600">${s.total_delivered||0}</span></td>
+                  <td class="px-4 py-3 font-medium ${(s.balance||0) >= 0 ? 'text-green-600' : 'text-red-500'}">${(s.balance||0).toLocaleString()} DZD</td>
                   <td class="px-4 py-3"><span class="status-badge ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${s.is_active ? 'Actif' : 'Inactif'}</span></td>
+                  <td class="px-4 py-3 flex gap-1">
+                    <button onclick="viewLedger('${s.id}','${s.full_name}')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded">Ledger</button>
+                    <button onclick="toggleSeller('${s.id}')" class="text-xs ${s.is_active?'bg-red-50 text-red-600 hover:bg-red-100':'bg-green-50 text-green-600 hover:bg-green-100'} px-2 py-1 rounded">${s.is_active?'Désactiver':'Activer'}</button>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -516,8 +543,91 @@ async function loadDashboard() {
       `
     }
 
+    async function toggleSeller(id) {
+      await api(`/api/sellers/${id}/toggle`, { method: 'PATCH' })
+      loadSellers()
+    }
+
+    async function viewLedger(id, name) {
+      const entries = await api(`/api/sellers/${id}/ledger`)
+      document.getElementById('modal-overlay').innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between p-5 border-b border-gray-100">
+            <h3 class="font-medium text-gray-900">Ledger — ${name}</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div class="overflow-y-auto">
+            ${!entries.length ? '<div class="p-5 text-sm text-gray-400 text-center">Aucune entrée</div>' : `
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50 sticky top-0">
+                  <tr>
+                    <th class="text-left px-4 py-2 text-xs text-gray-400">Type</th>
+                    <th class="text-left px-4 py-2 text-xs text-gray-400">Montant</th>
+                    <th class="text-left px-4 py-2 text-xs text-gray-400">Solde cumulé</th>
+                    <th class="text-left px-4 py-2 text-xs text-gray-400">Note</th>
+                    <th class="text-left px-4 py-2 text-xs text-gray-400">Date</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                  ${entries.map(e => `
+                    <tr class="hover:bg-gray-50">
+                      <td class="px-4 py-2 text-xs font-mono">${e.entry_type}</td>
+                      <td class="px-4 py-2 font-medium ${e.amount>=0?'text-green-600':'text-red-500'}">${e.amount>=0?'+':''}${e.amount.toLocaleString()} DZD</td>
+                      <td class="px-4 py-2 font-medium">${e.running_balance.toLocaleString()} DZD</td>
+                      <td class="px-4 py-2 text-xs text-gray-500">${e.note}</td>
+                      <td class="px-4 py-2 text-xs text-gray-400">${new Date(e.created_at).toLocaleDateString('fr-DZ')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            `}
+          </div>
+        </div>
+      `
+      document.getElementById('modal-overlay').classList.remove('hidden')
+    }
+
     async function loadAlerts() {
-      document.getElementById('alerts-list').innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucune alerte active</div>'
+      const data = await api('/api/superadmin/alerts')
+      const list = document.getElementById('alerts-list')
+      const preview = document.getElementById('alerts-preview')
+      const count = document.getElementById('alert-count')
+
+      if (!data || !data.length) {
+        const empty = '<div class="text-sm text-gray-400 text-center py-8">Aucune alerte active</div>'
+        if (list) list.innerHTML = empty
+        if (preview) preview.innerHTML = empty
+        if (count) count.classList.add('hidden')
+        return
+      }
+
+      if (count) { count.textContent = data.length; count.classList.remove('hidden') }
+
+      const severityClass = { critical: 'bg-red-100 text-red-700', high: 'bg-orange-100 text-orange-700', medium: 'bg-yellow-100 text-yellow-700', low: 'bg-blue-100 text-blue-700' }
+      const rows = data.map(a => `
+        <div class="flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+          <span class="status-badge ${severityClass[a.severity] || 'bg-gray-100 text-gray-600'} mt-0.5">${a.severity}</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-gray-900">${a.title}</div>
+            <div class="text-xs text-gray-400 mt-0.5">${a.description || ''}</div>
+          </div>
+          <button onclick="resolveAlert('${a.id}')" class="text-xs text-green-600 hover:underline whitespace-nowrap">Résoudre</button>
+        </div>
+      `).join('')
+
+      if (list) list.innerHTML = rows
+      if (preview) preview.innerHTML = data.slice(0,3).map(a => `
+        <div class="flex items-center gap-2 text-sm">
+          <span class="w-2 h-2 rounded-full ${a.severity==='critical'?'bg-red-500':a.severity==='high'?'bg-orange-500':'bg-yellow-400'}"></span>
+          <span class="text-gray-700">${a.title}</span>
+        </div>
+      `).join('')
+    }
+
+    async function resolveAlert(id) {
+      const note = prompt('Note de résolution (optionnel):') || ''
+      await api(`/api/superadmin/alerts/${id}/resolve`, { method: 'PATCH', body: JSON.stringify({ resolution_note: note }) })
+      loadAlerts()
     }
 
     async function loadUsers() {
@@ -537,6 +647,7 @@ async function loadDashboard() {
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Rôle</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Statut</th>
                 <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Dernière connexion</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
@@ -547,6 +658,10 @@ async function loadDashboard() {
                   <td class="px-4 py-3"><span class="status-badge bg-purple-100 text-purple-700">${u.role}</span></td>
                   <td class="px-4 py-3"><span class="status-badge ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">${u.is_active ? 'Actif' : 'Inactif'}</span></td>
                   <td class="px-4 py-3 text-gray-400 text-xs">${u.last_login ? new Date(u.last_login).toLocaleString('fr-DZ') : 'Jamais'}</td>
+                  <td class="px-4 py-3 flex gap-1">
+                    <button onclick="toggleUser('${u.id}')" class="text-xs ${u.is_active?'bg-red-50 text-red-600 hover:bg-red-100':'bg-green-50 text-green-600 hover:bg-green-100'} px-2 py-1 rounded">${u.is_active?'Désactiver':'Activer'}</button>
+                    <button onclick="forceLogout('${u.id}','${u.full_name}')" class="text-xs bg-gray-50 text-gray-600 hover:bg-gray-100 px-2 py-1 rounded">Déconnecter</button>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -555,17 +670,108 @@ async function loadDashboard() {
       `
     }
 
+    async function toggleUser(id) {
+      await api(`/api/superadmin/users/${id}/toggle`, { method: 'PATCH' })
+      loadUsers()
+    }
+
+    async function forceLogout(id, name) {
+      if (!confirm(`Déconnecter ${name} de toutes ses sessions ?`)) return
+      await api(`/api/superadmin/users/${id}/force-logout`, { method: 'POST' })
+      alert('Sessions invalidées.')
+    }
+
     async function loadAudit() {
-      document.getElementById('audit-list').innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Journal vide</div>'
+      const data = await api('/api/superadmin/audit')
+      const list = document.getElementById('audit-list')
+      if (!data || !data.length) {
+        list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Journal vide</div>'
+        return
+      }
+      list.innerHTML = `
+        <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Action</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Entité</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">IP</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase">Date</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${data.map(l => `
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-2 font-mono text-xs text-gray-700">${l.action}</td>
+                  <td class="px-4 py-2 text-gray-500 text-xs">${l.entity_type || ''} ${l.entity_id ? l.entity_id.slice(0,8)+'…' : ''}</td>
+                  <td class="px-4 py-2 text-gray-400 text-xs">${l.ip_address || '—'}</td>
+                  <td class="px-4 py-2 text-gray-400 text-xs">${new Date(l.created_at).toLocaleString('fr-DZ')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
     }
 
     async function loadMoney() {
-      document.getElementById('cod-field').textContent = '0 DZD'
-      document.getElementById('cod-hand').textContent = '0 DZD'
-      document.getElementById('cod-owed').textContent = '0 DZD'
+      const [finance, sellers] = await Promise.all([
+        api('/api/superadmin/finance'),
+        api('/api/superadmin/finance/sellers')
+      ])
+      if (finance) {
+        const fmt = n => Number(n || 0).toLocaleString('fr-DZ') + ' DZD'
+        document.getElementById('cod-field').textContent = fmt(finance.cod_today)
+        document.getElementById('cod-hand').textContent = fmt(finance.cod_with_drivers)
+        document.getElementById('cod-owed').textContent = fmt(finance.pending_payout)
+      }
+      const sellerList = document.getElementById('seller-balances')
+      if (sellerList && sellers && sellers.length) {
+        sellerList.innerHTML = sellers.filter(s => s.balance !== 0).map(s => `
+          <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+            <div>
+              <div class="text-sm font-medium text-gray-900">${s.full_name}</div>
+              <div class="text-xs text-gray-400">${s.phone}</div>
+            </div>
+            <div class="text-sm font-medium ${s.balance > 0 ? 'text-green-600' : 'text-red-500'}">${Number(s.balance).toLocaleString('fr-DZ')} DZD</div>
+          </div>
+        `).join('')
+      }
     }
 
-    function viewPackage(id) { alert('Détail colis: ' + id) }
+    async function viewPackage(id) {
+      const p = await api(`/api/packages/${id}`)
+      if (!p) return
+      const statusColors = { created:'bg-blue-100 text-blue-700', assigned:'bg-purple-100 text-purple-700', out_for_delivery:'bg-orange-100 text-orange-700', delivered:'bg-green-100 text-green-700', failed:'bg-red-100 text-red-700', returned:'bg-gray-100 text-gray-600', rescheduled:'bg-yellow-100 text-yellow-700', lost:'bg-black text-white' }
+      const hist = (p.history || []).map(h => `<div class="text-xs flex gap-2 py-1"><span class="text-gray-400">${h.created_at ? new Date(h.created_at).toLocaleString('fr-DZ') : ''}</span><span class="font-medium">${h.old_status||'—'} → ${h.new_status}</span><span class="text-gray-500">${h.reason||''} ${h.note||''}</span></div>`).join('')
+      document.getElementById('modal-overlay').innerHTML = `
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
+          <div class="flex items-center justify-between p-5 border-b border-gray-100">
+            <h3 class="font-medium text-gray-900">Détail colis</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">✕</button>
+          </div>
+          <div class="overflow-y-auto p-5">
+            <div class="space-y-4">
+              <div class="flex items-center gap-3">
+                <span class="font-mono text-lg font-bold text-gray-900">${p.tracking_id}</span>
+                <span class="status-badge ${statusColors[p.status]||'bg-gray-100 text-gray-600'}">${p.status}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-3 text-sm">
+                <div><div class="text-xs text-gray-400">Destinataire</div><div class="font-medium">${p.recipient_name}</div></div>
+                <div><div class="text-xs text-gray-400">Téléphone</div><div>${p.recipient_phone}${p.recipient_phone2?' / '+p.recipient_phone2:''}</div></div>
+                <div><div class="text-xs text-gray-400">Wilaya</div><div>${p.wilaya} — ${p.commune}</div></div>
+                <div><div class="text-xs text-gray-400">COD</div><div class="font-bold text-green-600">${Number(p.cod_amount).toLocaleString('fr-DZ')} DZD</div></div>
+                <div class="col-span-2"><div class="text-xs text-gray-400">Adresse</div><div>${p.address}</div></div>
+                <div><div class="text-xs text-gray-400">Description</div><div>${p.description}</div></div>
+                <div><div class="text-xs text-gray-400">Tentatives</div><div>${p.attempts}</div></div>
+              </div>
+              ${hist ? `<div><div class="text-xs font-medium text-gray-400 uppercase mb-2">Historique</div><div class="space-y-1 border-t pt-2">${hist}</div></div>` : ''}
+            </div>
+          </div>
+        </div>
+      `
+      document.getElementById('modal-overlay').classList.remove('hidden')
+    }
   async function showCreatePackage() {
   const sellers = await api('/api/sellers')
   const prices  = await api('/api/superadmin/wilaya-prices')
@@ -1001,7 +1207,6 @@ async function saveUser() {
       window.location.href = '/login'
     }
 
-    // Add route to main.py
     loadDashboard()
     let _allPrices = {}
 

@@ -5,7 +5,7 @@ DATABASE_URL = "postgresql://postgres:fxloukess123@localhost:5432/fxloukess"
 
 # Security
 SECRET_KEY = "fxloukess-secret-key-change-this-in-production"
-ALGORITHM = "RS256"
+ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours for all roles except driver
 
 # Station

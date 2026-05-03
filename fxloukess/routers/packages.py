@@ -387,3 +387,33 @@ def format_package(p: Package, full: bool = False) -> dict:
             "created_at": h.created_at.isoformat()
         } for h in p.history]
     return result
+@router.get("/track/{tracking_id}")
+async def public_track(
+    tracking_id: str,
+    db: Session = Depends(get_db)
+):
+    """Public endpoint — no auth required."""
+    p = db.query(Package).filter(
+        Package.tracking_id == tracking_id.upper()
+    ).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Colis introuvable")
+    # Return limited info for public
+    history = db.query(PackageHistory).filter(
+        PackageHistory.package_id == p.id
+    ).order_by(PackageHistory.created_at.asc()).all()
+    return {
+        "tracking_id": p.tracking_id,
+        "recipient_name": p.recipient_name,
+        "wilaya": p.wilaya,
+        "commune": p.commune,
+        "status": p.status.value if hasattr(p.status, "value") else p.status,
+        "attempts": p.attempts,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+        "delivered_at": p.delivered_at.isoformat() if p.delivered_at else None,
+        "history": [{
+            "new_status": h.new_status,
+            "reason": h.reason,
+            "created_at": h.created_at.isoformat() if h.created_at else None
+        } for h in history]
+    }

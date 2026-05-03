@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>fxloukess — Retours</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; font-size:14px; color:#6b7280; cursor:pointer; transition:all .15s; }
+    .nav-item:hover, .nav-item.active { background:#f0fdf4; color:#16a34a; }
+    .status-badge { display:inline-flex; padding:2px 8px; border-radius:9999px; font-size:12px; font-weight:500; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <div class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col">
+    <div class="p-4 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
+        </div>
+        <span class="font-medium text-gray-900">fxloukess</span>
+      </div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a onclick="showPage('returns')" class="nav-item active" id="nav-returns">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+        Retours
+      </a>
+      <a onclick="showPage('payout')" class="nav-item" id="nav-payout">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+        Paiements
+      </a>
+    </nav>
+    <div class="p-3 border-t border-gray-100">
+      <div class="flex items-center gap-2 px-3 py-2">
+        <div class="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center">
+          <span class="text-green-700 text-xs font-medium" id="user-initials">RT</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-medium text-gray-900 truncate" id="user-name">Returns</div>
+        </div>
+        <button onclick="logout()" title="Déconnexion">
+          <svg class="w-4 h-4 text-gray-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ml-52 p-6">
+
+    <!-- RETURNS PAGE -->
+    <div id="page-returns">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-medium text-gray-900">Zone retours</h1>
+          <p class="text-sm text-gray-500 mt-1">Colis échoués en zone de retour</p>
+        </div>
+        <button onclick="loadReturns()" class="border border-gray-200 text-sm px-4 py-2 rounded-lg hover:bg-gray-50">Rafraîchir</button>
+      </div>
+      <div id="returns-list">
+        <div class="text-sm text-gray-400 text-center py-8">Chargement...</div>
+      </div>
+    </div>
+
+    <!-- PAYOUT PAGE -->
+    <div id="page-payout" class="hidden">
+      <div class="mb-6">
+        <h1 class="text-2xl font-medium text-gray-900">Paiements expéditeurs</h1>
+        <p class="text-sm text-gray-500 mt-1">Versements COD aux expéditeurs</p>
+      </div>
+      <div id="sellers-list">
+        <div class="text-sm text-gray-400 text-center py-8">Chargement...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Payout modal -->
+  <div id="payout-modal" class="hidden fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+      <h3 class="text-base font-medium text-gray-900 mb-4" id="payout-seller-name"></h3>
+      <div class="space-y-3">
+        <input id="payout-amount" type="number" placeholder="Montant (DZD)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <input id="payout-note" type="text" placeholder="Note" value="Paiement COD" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+        <div class="flex gap-2 pt-2">
+          <button onclick="closePayout()" class="flex-1 border border-gray-200 text-sm py-2 rounded-lg">Annuler</button>
+          <button onclick="confirmPayout()" class="flex-1 bg-green-500 hover:bg-green-600 text-white text-sm py-2 rounded-lg">Confirmer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token')
+    if (!token) window.location.href = '/login'
+
+    const name = localStorage.getItem('name') || 'RT'
+    document.getElementById('user-name').textContent = name
+    document.getElementById('user-initials').textContent = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+
+    let activeSellerId = null
+
+    function api(url, options={}) {
+      return fetch(url, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        ...options
+      }).then(r => r.ok ? r.json() : Promise.reject(r))
+    }
+
+    function showPage(page) {
+      document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'))
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+      document.getElementById('page-' + page).classList.remove('hidden')
+      document.getElementById('nav-' + page).classList.add('active')
+      if (page === 'returns') loadReturns()
+      if (page === 'payout')  loadSellers()
+    }
+
+    const REASONS = ['client_absent','refused','wrong_address','no_answer','rescheduled_by_client','damaged']
+
+    async function loadReturns() {
+      const data = await api('/api/returns')
+      const list = document.getElementById('returns-list')
+      if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucun retour</div>'; return }
+      list.innerHTML = `
+        <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tracking</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Destinataire</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Wilaya</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tentatives</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Statut</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${data.map(p => `
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-3 font-mono text-xs font-bold">${p.tracking_id}</td>
+                  <td class="px-4 py-3 font-medium text-gray-900">${p.recipient_name}</td>
+                  <td class="px-4 py-3 text-gray-500">${p.wilaya}</td>
+                  <td class="px-4 py-3 text-gray-500">${p.attempts}</td>
+                  <td class="px-4 py-3"><span class="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">${p.status}</span></td>
+                  <td class="px-4 py-3 flex gap-2">
+                    <button onclick="confirmReturn('${p.id}')" class="text-xs bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded">Retour</button>
+                    <button onclick="reschedule('${p.id}')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded">Reprog.</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+
+    async function confirmReturn(id) {
+      const reason = prompt('Raison du retour:\n' + REASONS.join('\n')) || 'refused'
+      await api(`/api/returns/${id}/receive`, { method:'POST', body: JSON.stringify({ reason }) })
+      loadReturns()
+    }
+
+    async function reschedule(id) {
+      const note = prompt('Note de reprogrammation (optionnel):') || ''
+      await api(`/api/returns/${id}/reschedule`, { method:'POST', body: JSON.stringify({ note }) })
+      loadReturns()
+    }
+
+    async function loadSellers() {
+      const data = await api('/api/sellers')
+      const list = document.getElementById('sellers-list')
+      const owing = data.filter(s => s.balance > 0)
+      if (!owing.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucun paiement dû</div>'; return }
+      list.innerHTML = `
+        <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Expéditeur</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Téléphone</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Solde dû</th>
+                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+              ${owing.map(s => `
+                <tr>
+                  <td class="px-4 py-3 font-medium">${s.full_name}</td>
+                  <td class="px-4 py-3 text-gray-500">${s.phone}</td>
+                  <td class="px-4 py-3 font-medium text-green-600">${Number(s.balance).toLocaleString()} DZD</td>
+                  <td class="px-4 py-3">
+                    <button onclick="openPayout('${s.id}','${s.full_name}',${s.balance})" class="text-xs bg-green-50 text-green-600 hover:bg-green-100 px-3 py-1 rounded-lg">Payer</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `
+    }
+
+    function openPayout(id, name, balance) {
+      activeSellerId = id
+      document.getElementById('payout-seller-name').textContent = `Payer ${name} — solde: ${Number(balance).toLocaleString()} DZD`
+      document.getElementById('payout-amount').value = balance
+      document.getElementById('payout-modal').classList.remove('hidden')
+    }
+
+    function closePayout() {
+      activeSellerId = null
+      document.getElementById('payout-modal').classList.add('hidden')
+    }
+
+    async function confirmPayout() {
+      const amount = document.getElementById('payout-amount').value
+      const note = document.getElementById('payout-note').value
+      await api(`/api/returns/payout/${activeSellerId}`, { method:'POST', body: JSON.stringify({ amount: parseFloat(amount), note }) })
+      closePayout()
+      loadSellers()
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method:'POST' })
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+
+    loadReturns()
+  </script>
+</body>
+</html>

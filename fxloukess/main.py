@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from contextlib import asynccontextmanager
 from database import check_connection
 import os
@@ -27,32 +28,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-os.makedirs("static", exist_ok=True)
-os.makedirs("static/css", exist_ok=True)
-os.makedirs("static/js", exist_ok=True)
-os.makedirs("templates", exist_ok=True)
-os.makedirs("photos", exist_ok=True)
-os.makedirs("prints", exist_ok=True)
+for d in ["static", "static/css", "static/js", "templates", "photos", "prints"]:
+    os.makedirs(d, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-@app.get("/")
-async def root(request: Request):
-    from fastapi.responses import HTMLResponse
-    with open("templates/login.html", encoding="utf-8") as f:
+def _html(path: str) -> HTMLResponse:
+    with open(f"templates/{path}", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
+
+@app.get("/")
+async def root():
+    return _html("login.html")
 
 @app.get("/login")
 async def login_page():
-    from fastapi.responses import HTMLResponse
-    with open("templates/login.html", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+    return _html("login.html")
+
 @app.get("/superadmin")
 async def superadmin_page():
-    from fastapi.responses import HTMLResponse
-    with open("templates/superadmin.html", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read())
+    return _html("superadmin.html")
+
+@app.get("/frontdesk")
+async def frontdesk_page():
+    return _html("frontdesk.html")
+
+@app.get("/dispatch")
+async def dispatch_page():
+    return _html("dispatch.html")
+
+@app.get("/returns")
+async def returns_page():
+    return _html("returns.html")
+
+@app.get("/driver")
+async def driver_page():
+    return _html("driver.html")
+
+@app.get("/manager")
+async def manager_page():
+    return _html("superadmin.html")  # same UI, role-gated on backend
+
+@app.get("/track")
+async def track_page():
+    return _html("track.html")
 
 @app.get("/health")
 async def health():

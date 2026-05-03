@@ -1,21 +1,47 @@
-from database import get_db
-from sqlalchemy import text
+"""
+migrate.py  — run once to create tables + seed a superadmin user
+Usage: python migrate.py
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
 
-db = next(get_db())
+from database import create_tables, SessionLocal
+from models import User, Station, RoleEnum
+from passlib.context import CryptContext
+from config import STATION_CODE, STATION_NAME
 
-migrations = [
-    "ALTER TABLE packages ALTER COLUMN seller_id DROP NOT NULL",
-    "ALTER TABLE packages ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'seller'",
-    "ALTER TABLE packages ADD COLUMN IF NOT EXISTS walk_in_name VARCHAR(100)",
-    "ALTER TABLE packages ADD COLUMN IF NOT EXISTS walk_in_phone VARCHAR(20)",
-]
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-for sql in migrations:
+def seed():
+    create_tables()
+    db = SessionLocal()
     try:
-        db.execute(text(sql))
-        print(f"OK: {sql[:60]}")
-    except Exception as e:
-        print(f"SKIP: {e}")
+        station = db.query(Station).filter(Station.code == STATION_CODE).first()
+        if not station:
+            station = Station(code=STATION_CODE, name=STATION_NAME, wilaya="Oran", is_active=True)
+            db.add(station)
+            db.flush()
+            print(f"Station created: {STATION_CODE} — {STATION_NAME}")
+        else:
+            print(f"Station exists: {station.code}")
 
-db.commit()
-print("\nMigration complete.")
+        admin = db.query(User).filter(User.phone == "0555000000").first()
+        if not admin:
+            admin = User(
+                station_id=station.id, full_name="Super Admin",
+                phone="0555000000", hashed_password=pwd_context.hash("admin1234"),
+                role=RoleEnum.superadmin, is_active=True, language="fr"
+            )
+            db.add(admin)
+            print("Superadmin created — phone: 0555000000 / password: admin1234")
+            print("WARNING: Change this password immediately!")
+        else:
+            print("Superadmin already exists.")
+
+        db.commit()
+        print("Migration complete.")
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    seed()

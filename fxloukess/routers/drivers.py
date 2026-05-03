@@ -124,6 +124,7 @@ def format_driver(d: Driver, db: Session, full: bool = False) -> dict:
     ).count()
     result = {
         "id": d.id,
+        "user_id": d.user_id,
         "full_name": d.full_name,
         "phone": d.phone,
         "wilaya": d.wilaya,

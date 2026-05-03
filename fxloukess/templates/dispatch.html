@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>fxloukess — Dispatch</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; font-size:14px; color:#6b7280; cursor:pointer; transition:all .15s; }
+    .nav-item:hover, .nav-item.active { background:#f0fdf4; color:#16a34a; }
+    .pkg-row.selected { background:#f0fdf4; outline: 2px solid #16a34a; outline-offset:-2px; border-radius:8px; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <div class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col">
+    <div class="p-4 border-b border-gray-100">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
+        </div>
+        <span class="font-medium text-gray-900">fxloukess</span>
+      </div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a onclick="showPage('ready')" class="nav-item active" id="nav-ready">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Prêts à dispatcher
+      </a>
+      <a onclick="showPage('drivers')" class="nav-item" id="nav-drivers">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Livreurs
+      </a>
+    </nav>
+    <div class="p-3 border-t border-gray-100">
+      <div class="flex items-center gap-2 px-3 py-2">
+        <div class="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center">
+          <span class="text-green-700 text-xs font-medium" id="user-initials">DP</span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-medium text-gray-900 truncate" id="user-name">Dispatch</div>
+        </div>
+        <button onclick="logout()" title="Déconnexion">
+          <svg class="w-4 h-4 text-gray-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ml-52 p-6">
+
+    <!-- READY PAGE -->
+    <div id="page-ready">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-medium text-gray-900">Dispatch colis</h1>
+          <p class="text-sm text-gray-500 mt-1">Sélectionnez les colis puis choisissez un livreur</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="selected-count" class="text-sm text-gray-500">0 sélectionné(s)</span>
+          <select id="driver-select" class="border border-gray-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">Choisir un livreur...</option>
+          </select>
+          <button onclick="assignSelected()" class="bg-green-500 hover:bg-green-600 text-white text-sm font-medium px-4 py-2 rounded-lg">Assigner</button>
+        </div>
+      </div>
+      <div id="ready-list">
+        <div class="text-sm text-gray-400 text-center py-8">Chargement...</div>
+      </div>
+    </div>
+
+    <!-- DRIVERS PAGE -->
+    <div id="page-drivers" class="hidden">
+      <div class="mb-6">
+        <h1 class="text-2xl font-medium text-gray-900">Livreurs actifs</h1>
+        <p class="text-sm text-gray-500 mt-1">Sacs et départs</p>
+      </div>
+      <div id="drivers-list">
+        <div class="text-sm text-gray-400 text-center py-8">Chargement...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token')
+    if (!token) window.location.href = '/login'
+
+    const name = localStorage.getItem('name') || 'DP'
+    document.getElementById('user-name').textContent = name
+    document.getElementById('user-initials').textContent = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+
+    let selectedIds = new Set()
+
+    function api(url, options={}) {
+      return fetch(url, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        ...options
+      }).then(r => r.ok ? r.json() : Promise.reject(r))
+    }
+
+    function showPage(page) {
+      document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'))
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
+      document.getElementById('page-' + page).classList.remove('hidden')
+      document.getElementById('nav-' + page).classList.add('active')
+      if (page === 'ready')   { loadReady(); loadDriverSelect() }
+      if (page === 'drivers') loadDrivers()
+    }
+
+    function toggleSelect(id, el) {
+      if (selectedIds.has(id)) { selectedIds.delete(id); el.classList.remove('selected') }
+      else { selectedIds.add(id); el.classList.add('selected') }
+      document.getElementById('selected-count').textContent = selectedIds.size + ' sélectionné(s)'
+    }
+
+    async function loadDriverSelect() {
+      const drivers = await api('/api/drivers')
+      const sel = document.getElementById('driver-select')
+      sel.innerHTML = '<option value="">Choisir un livreur...</option>' +
+        (drivers || []).filter(d => d.is_active).map(d => `<option value="${d.id}">${d.full_name}</option>`).join('')
+    }
+
+    async function loadReady() {
+      const data = await api('/api/dispatch/ready')
+      selectedIds.clear()
+      document.getElementById('selected-count').textContent = '0 sélectionné(s)'
+      const list = document.getElementById('ready-list')
+      if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucun colis prêt</div>'; return }
+      list.innerHTML = `
+        <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          <div class="p-3 border-b border-gray-100 text-xs text-gray-400">Cliquez pour sélectionner</div>
+          <div class="divide-y divide-gray-50">
+            ${data.map(p => `
+              <div class="pkg-row flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-gray-50" onclick="toggleSelect('${p.id}', this)">
+                <div class="flex-1">
+                  <div class="font-mono text-xs font-bold text-gray-900">${p.tracking_id}</div>
+                  <div class="text-sm text-gray-700 mt-0.5">${p.recipient_name} — ${p.wilaya}, ${p.commune}</div>
+                  <div class="text-xs text-gray-400">${p.address}</div>
+                </div>
+                <div class="text-right">
+                  <div class="font-medium text-green-600 text-sm">${Number(p.cod_amount).toLocaleString()} DZD</div>
+                  ${p.is_fragile ? '<div class="text-xs text-orange-500">Fragile</div>' : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `
+    }
+
+    async function assignSelected() {
+      const driverId = document.getElementById('driver-select').value
+      if (!driverId) { alert('Sélectionnez un livreur'); return }
+      if (!selectedIds.size) { alert('Sélectionnez au moins un colis'); return }
+      const res = await api('/api/dispatch/assign', { method:'POST', body: JSON.stringify({ driver_id: driverId, package_ids: [...selectedIds] }) })
+      alert(`${res.assigned} colis assignés`)
+      loadReady()
+    }
+
+    async function loadDrivers() {
+      const data = await api('/api/drivers')
+      const list = document.getElementById('drivers-list')
+      if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucun livreur</div>'; return }
+      list.innerHTML = `<div class="grid grid-cols-3 gap-4">` +
+        data.filter(d => d.is_active).map(d => `
+          <div class="bg-white border border-gray-100 rounded-xl p-5">
+            <div class="font-medium text-gray-900 mb-1">${d.full_name}</div>
+            <div class="text-xs text-gray-400 mb-3">${d.phone}</div>
+            <div class="flex justify-between text-sm mb-3">
+              <div><div class="text-xs text-gray-400">Sac</div><div class="font-medium">${d.packages_out}</div></div>
+              <div><div class="text-xs text-gray-400">Livrés</div><div class="font-medium text-green-600">${d.delivered_today}</div></div>
+              <div><div class="text-xs text-gray-400">Cash</div><div class="font-medium text-blue-600">${Number(d.cash_on_hand).toLocaleString()}</div></div>
+            </div>
+            <button onclick="driverDepart('${d.id}', this)" class="w-full border border-green-200 text-green-600 hover:bg-green-50 text-xs py-2 rounded-lg">
+              Confirmer départ
+            </button>
+          </div>
+        `).join('') + `</div>`
+    }
+
+    async function driverDepart(id, btn) {
+      if (!confirm('Confirmer le départ ?')) return
+      await api(`/api/dispatch/driver/${id}/depart`, { method:'POST' })
+      btn.textContent = 'Parti ✓'
+      btn.disabled = true
+      loadDrivers()
+    }
+
+    async function logout() {
+      await fetch('/api/auth/logout', { method:'POST' })
+      localStorage.clear()
+      window.location.href = '/login'
+    }
+
+    showPage('ready')
+  </script>
+</body>
+</html>
