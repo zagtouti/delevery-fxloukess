@@ -1,0 +1,16 @@
+2026-05-04 20:40:16,843 [INFO] fxloukess: Starting fxloukess…
+2026-05-04 20:40:16,924 [INFO] fxloukess.db: Database connection OK
+2026-05-04 20:40:16,957 [INFO] fxloukess.db: All tables created (or already exist)
+2026-05-04 20:40:40,067 [WARNING] fxloukess.auth: Failed login for phone=0550000001 from 127.0.0.1
+2026-05-04 20:41:01,068 [INFO] fxloukess.auth: Login OK: 0555000000 role=RoleEnum.superadmin
+2026-05-04 20:44:32,859 [INFO] fxloukess.auth: Login OK: 05555555555 role=RoleEnum.frontdesk
+2026-05-04 20:47:19,680 [INFO] fxloukess.auth: Login OK: 0555000000 role=RoleEnum.superadmin
+2026-05-04 20:51:59,671 [INFO] fxloukess: fxloukess shut down
+2026-05-04 20:52:11,018 [INFO] fxloukess: Starting fxloukess…
+2026-05-04 20:52:11,092 [INFO] fxloukess.db: Database connection OK
+2026-05-04 20:52:11,124 [INFO] fxloukess.db: All tables created (or already exist)
+2026-05-04 20:53:48,378 [INFO] fxloukess.auth: Login OK: 0505050505 role=RoleEnum.driver
+2026-05-04 20:54:47,173 [INFO] fxloukess.auth: Login OK: 0555000000 role=RoleEnum.superadmin
+2026-05-04 20:56:31,934 [INFO] fxloukess.auth: Login OK: 1231231230 role=RoleEnum.dispatch
+2026-05-04 20:58:19,094 [INFO] fxloukess.auth: Login OK: 0555000000 role=RoleEnum.superadmin
+2026-05-04 20:59:07,506 [INFO] fxloukess.auth: Login OK: 05555555555 role=RoleEnum.frontdesk
