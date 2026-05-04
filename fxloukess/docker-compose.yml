@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: fxloukess
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: fxloukess123
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:fxloukess123@db:5432/fxloukess
+      SECRET_KEY: CHANGE-THIS-IN-PRODUCTION
+      STATION_CODE: ORA
+      STATION_NAME: PDEX Oran
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./photos:/app/photos
+      - ./prints:/app/prints
+
+volumes:
+  pgdata:

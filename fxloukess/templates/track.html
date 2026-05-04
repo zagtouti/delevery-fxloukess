@@ -1,85 +1,97 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Suivi de colis — fxloukess</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; }
-    .step { display:flex; gap:12px; align-items:flex-start; }
-    .step-dot { width:12px; height:12px; border-radius:50%; margin-top:4px; flex-shrink:0; }
-    .step-line { width:2px; background:#e5e7eb; flex-shrink:0; margin-left:5px; }
-    .step-active .step-dot { background:#16a34a; }
-    .step-done .step-dot { background:#16a34a; }
-    .step-pending .step-dot { background:#e5e7eb; }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Suivi de colis — fxloukess</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif}
+  .input{width:100%;border:2px solid #e5e7eb;border-radius:12px;padding:14px 18px;font-size:15px;outline:none;transition:border .15s;letter-spacing:.05em}
+  .input:focus{border-color:#22c55e;box-shadow:0 0 0 4px #dcfce7}
+  .step-line{width:2px;background:#e5e7eb;margin-left:5px;flex-shrink:0}
+  .step-line.done{background:#22c55e}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .4s ease}
+</style>
 </head>
-<body class="bg-gray-50 min-h-screen flex flex-col items-center justify-start pt-12 px-4">
+<body class="min-h-screen bg-gradient-to-br from-green-50 to-gray-100 flex flex-col items-center py-12 px-4">
 
   <div class="w-full max-w-md">
+    <!-- Logo -->
     <div class="text-center mb-8">
-      <div class="inline-flex items-center gap-2 mb-4">
-        <div class="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
-        </div>
-        <span class="text-xl font-semibold text-gray-900">fxloukess</span>
+      <div class="inline-flex items-center justify-center w-14 h-14 bg-green-500 rounded-2xl mb-4 shadow-lg">
+        <svg class="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
       </div>
-      <h1 class="text-2xl font-medium text-gray-900 mb-1">Suivi de colis</h1>
-      <p class="text-gray-500 text-sm">Entrez votre numéro de suivi</p>
+      <h1 class="text-2xl font-bold text-gray-900">Suivi de colis</h1>
+      <p class="text-sm text-gray-500 mt-1">Entrez votre numéro de suivi</p>
     </div>
 
-    <div class="bg-white border border-gray-100 rounded-2xl p-6 mb-4">
+    <!-- Search -->
+    <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
       <div class="flex gap-3">
-        <input id="tracking-input" type="text" placeholder="Ex: ORA202505010001"
-          class="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-green-500"
-          onkeydown="if(event.key==='Enter') track()">
+        <input id="tracking-input" type="text" class="input flex-1" placeholder="Ex: ORA202505010001"
+          style="letter-spacing:0.1em;text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()"
+          onkeydown="if(event.key==='Enter')track()">
         <button onclick="track()" id="track-btn"
-          class="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-xl text-sm font-medium transition">
+          class="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-semibold px-6 py-3 rounded-xl text-sm transition">
           Suivre
         </button>
       </div>
     </div>
 
-    <div id="result" class="hidden"></div>
-    <div id="error-msg" class="hidden bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl px-4 py-3 text-center"></div>
+    <!-- Error -->
+    <div id="error-box" class="hidden bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 text-center mb-4"></div>
 
+    <!-- Result -->
+    <div id="result" class="hidden fade-in"></div>
+
+    <div class="text-center mt-6">
+      <a href="/login" class="text-xs text-gray-400 hover:text-green-600 transition">Espace professionnel →</a>
+    </div>
   </div>
 
   <script>
-    const STATUS_LABELS = {
-      created: 'Colis enregistré',
-      assigned: 'Assigné à un livreur',
-      out_for_delivery: 'En cours de livraison',
-      delivered: 'Livré',
-      failed: 'Tentative échouée',
-      returned: 'Retourné',
-      rescheduled: 'Reprogrammé',
-      waiting_for_client: 'En attente du client',
-      held_at_station: 'En attente à la station',
-      lost: 'Perdu'
+    const STATUS_LABEL = {
+      created:'Enregistré', assigned:'Assigné', out_for_delivery:'En livraison',
+      delivered:'Livré', failed:'Tentative échouée', returned:'Retourné',
+      rescheduled:'Reprogrammé', waiting_for_client:'En attente du client',
+      held_at_station:'En attente en station', lost:'Perdu',
     }
-    const STATUS_ORDER = ['created','assigned','out_for_delivery','delivered']
+    const STATUS_CLR = {
+      delivered:'bg-green-100 text-green-700',
+      out_for_delivery:'bg-orange-100 text-orange-700',
+      failed:'bg-red-100 text-red-700',
+      returned:'bg-gray-100 text-gray-600',
+      rescheduled:'bg-yellow-100 text-yellow-700',
+    }
+    const STEPS = [
+      {key:'created',        label:'Colis enregistré',      icon:'📦'},
+      {key:'assigned',       label:'Assigné à un livreur',  icon:'🚴'},
+      {key:'out_for_delivery',label:'En cours de livraison',icon:'🛵'},
+      {key:'delivered',      label:'Livré',                 icon:'✅'},
+    ]
 
     async function track() {
-      const id = document.getElementById('tracking-input').value.trim().toUpperCase()
+      const id  = document.getElementById('tracking-input').value.trim()
       const btn = document.getElementById('track-btn')
-      const result = document.getElementById('result')
-      const errEl = document.getElementById('error-msg')
+      const err = document.getElementById('error-box')
+      const res = document.getElementById('result')
       if (!id) return
-      btn.textContent = '...'
+
+      btn.textContent = '…'
       btn.disabled = true
-      result.classList.add('hidden')
-      errEl.classList.add('hidden')
+      err.classList.add('hidden')
+      res.classList.add('hidden')
 
       try {
-        const res = await fetch(`/api/packages/track/${id}`)
-        if (!res.ok) throw new Error('Colis introuvable')
-        const p = await res.json()
+        const r = await fetch(`/api/packages/track/${id}`)
+        if (!r.ok) throw new Error('Colis introuvable')
+        const p = await r.json()
         renderResult(p)
       } catch(e) {
-        errEl.textContent = 'Colis introuvable. Vérifiez le numéro.'
-        errEl.classList.remove('hidden')
+        err.textContent = 'Colis introuvable. Vérifiez le numéro de suivi.'
+        err.classList.remove('hidden')
       } finally {
         btn.textContent = 'Suivre'
         btn.disabled = false
@@ -87,52 +99,74 @@
     }
 
     function renderResult(p) {
-      const status = p.status
-      const statusColor = {
-        delivered: 'bg-green-100 text-green-700',
-        failed: 'bg-red-100 text-red-700',
-        returned: 'bg-gray-100 text-gray-600',
-        out_for_delivery: 'bg-orange-100 text-orange-700',
-      }[status] || 'bg-blue-100 text-blue-700'
+      const status  = p.status
+      const stepIdx = STEPS.findIndex(s => s.key === status)
+      const clr     = STATUS_CLR[status] || 'bg-blue-100 text-blue-700'
 
-      const steps = STATUS_ORDER.map((s, i) => {
-        const idx = STATUS_ORDER.indexOf(status)
-        const cls = i < idx ? 'step-done' : i === idx ? 'step-active' : 'step-pending'
-        return { label: STATUS_LABELS[s] || s, cls }
-      })
-
-      const history = (p.history || []).reverse().map(h => `
-        <div class="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-          <div class="text-xs text-gray-400 whitespace-nowrap mt-0.5">${h.created_at ? new Date(h.created_at).toLocaleDateString('fr-DZ') : ''}</div>
-          <div>
-            <div class="text-sm text-gray-700">${STATUS_LABELS[h.new_status] || h.new_status}</div>
-            ${h.reason ? `<div class="text-xs text-gray-400">${h.reason}</div>` : ''}
-          </div>
-        </div>
-      `).join('')
-
-      document.getElementById('result').innerHTML = `
-        <div class="bg-white border border-gray-100 rounded-2xl p-6 mb-4">
-          <div class="flex items-center justify-between mb-4">
-            <div class="font-mono font-bold text-gray-900">${p.tracking_id}</div>
-            <span class="text-xs px-3 py-1 rounded-full font-medium ${statusColor}">${STATUS_LABELS[status] || status}</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3 text-sm mb-4">
-            <div><div class="text-xs text-gray-400">Destinataire</div><div class="font-medium">${p.recipient_name}</div></div>
-            <div><div class="text-xs text-gray-400">Wilaya</div><div>${p.wilaya}</div></div>
-            <div><div class="text-xs text-gray-400">Tentatives</div><div>${p.attempts}</div></div>
-            ${p.delivered_at ? `<div><div class="text-xs text-gray-400">Livré le</div><div class="text-green-600">${new Date(p.delivered_at).toLocaleDateString('fr-DZ')}</div></div>` : ''}
-          </div>
-          ${history ? `
-            <div class="border-t border-gray-100 pt-4">
-              <div class="text-xs text-gray-400 uppercase font-medium mb-3">Historique</div>
-              ${history}
+      const stepsHtml = STEPS.map((s, i) => {
+        const done   = i <= stepIdx && !['failed','returned','lost'].includes(status)
+        const active = i === stepIdx
+        const dotClr = done ? '#22c55e' : '#e5e7eb'
+        const textClr = done ? 'text-gray-900 font-semibold' : 'text-gray-400'
+        return `
+          <div class="flex gap-3 items-start">
+            <div class="flex flex-col items-center">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0" style="background:${done?'#dcfce7':'#f3f4f6'};border:2px solid ${dotClr}">
+                ${done ? '✓' : (i+1)}
+              </div>
+              ${i < STEPS.length-1 ? `<div class="w-0.5 h-6 mt-1" style="background:${done&&i<stepIdx?'#22c55e':'#e5e7eb'}"></div>` : ''}
             </div>
-          ` : ''}
-        </div>
-      `
-      document.getElementById('result').classList.remove('hidden')
+            <div class="pt-1.5">
+              <div class="${textClr} text-sm">${s.icon} ${s.label}</div>
+            </div>
+          </div>`
+      }).join('')
+
+      const histHtml = p.history?.length ? `
+        <div class="border-t pt-4 mt-4">
+          <div class="text-xs font-semibold text-gray-400 uppercase mb-3">Historique</div>
+          <div class="space-y-2">
+            ${p.history.map(h=>`
+              <div class="flex gap-3 text-xs">
+                <span class="text-gray-400 flex-shrink-0 w-28">${h.created_at?new Date(h.created_at).toLocaleDateString('fr-DZ'):''}</span>
+                <span class="font-medium text-gray-700">${STATUS_LABEL[h.new_status]||h.new_status}</span>
+                ${h.reason?`<span class="text-gray-400">${h.reason}</span>`:''}
+              </div>`).join('')}
+          </div>
+        </div>` : ''
+
+      const result = document.getElementById('result')
+      result.innerHTML = `
+        <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <div class="font-mono font-bold text-gray-900 text-lg">${p.tracking_id}</div>
+              <div class="text-sm text-gray-500 mt-0.5">${p.recipient_name} — ${p.wilaya}</div>
+            </div>
+            <span class="inline-flex px-3 py-1 rounded-full text-xs font-semibold ${clr}">${STATUS_LABEL[status]||status}</span>
+          </div>
+
+          ${['failed','returned','lost'].includes(status) ? `
+          <div class="bg-red-50 border border-red-100 rounded-xl p-3 text-sm text-red-700 mb-4">
+            ⚠ ${STATUS_LABEL[status]} — contactez l'expéditeur ou le service client.
+          </div>` : ''}
+
+          <div class="space-y-1 mb-4">${stepsHtml}</div>
+
+          <div class="grid grid-cols-2 gap-3 text-sm border-t pt-4">
+            <div><div class="text-xs text-gray-400">Enregistré le</div><div class="font-medium">${p.created_at?new Date(p.created_at).toLocaleDateString('fr-DZ'):'—'}</div></div>
+            ${p.delivered_at?`<div><div class="text-xs text-gray-400">Livré le</div><div class="font-medium text-green-700">${new Date(p.delivered_at).toLocaleDateString('fr-DZ')}</div></div>`:''}
+            <div><div class="text-xs text-gray-400">Tentatives</div><div class="font-medium">${p.attempts}</div></div>
+          </div>
+          ${histHtml}
+        </div>`
+
+      result.classList.remove('hidden')
     }
+
+    // Pre-fill from URL query param ?t=TRACKING
+    const urlParam = new URLSearchParams(location.search).get('t')
+    if (urlParam) { document.getElementById('tracking-input').value = urlParam.toUpperCase(); track() }
   </script>
 </body>
 </html>

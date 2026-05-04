@@ -1,277 +1,311 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>fxloukess — Accueil</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { font-family: system-ui, sans-serif; }
-    .nav-item { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:8px; font-size:14px; color:#6b7280; cursor:pointer; transition:all .15s; }
-    .nav-item:hover, .nav-item.active { background:#f0fdf4; color:#16a34a; }
-    .status-badge { display:inline-flex; padding:2px 8px; border-radius:9999px; font-size:12px; font-weight:500; }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>fxloukess — Accueil</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#6b7280;cursor:pointer;transition:all .15s}
+  .nav-item:hover{background:#f0fdf4;color:#16a34a}
+  .nav-item.active{background:#dcfce7;color:#15803d;font-weight:500}
+  .input{width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;transition:border .15s}
+  .input:focus{border-color:#22c55e;box-shadow:0 0 0 3px #dcfce7}
+  .select{width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px;font-size:13px;outline:none;background:#fff}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none}
+  .btn-green{background:#22c55e;color:#fff}.btn-green:hover{background:#16a34a}
+  .btn-ghost{background:#fff;border:1px solid #e5e7eb;color:#374151}.btn-ghost:hover{background:#f9fafb}
+  .btn-red{background:#fef2f2;border:1px solid #fecaca;color:#dc2626}.btn-red:hover{background:#fee2e2}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:10px 16px;font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;background:#f9fafb}
+  td{padding:10px 16px;border-bottom:1px solid #f3f4f6;color:#374151}
+  tr:last-child td{border-bottom:none}
+  .toast{position:fixed;bottom:24px;right:24px;z-index:100;padding:12px 18px;border-radius:12px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.12);animation:slideUp .3s ease}
+  @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+  #content>div{display:none}#content>div.active{display:block}
+</style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
-  <div class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col">
-    <div class="p-4 border-b border-gray-100">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-          <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
-        </div>
-        <span class="font-medium text-gray-900">fxloukess</span>
-      </div>
+<aside class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col z-10">
+  <div class="p-4 border-b border-gray-100 flex items-center gap-2.5">
+    <div class="w-8 h-8 bg-green-500 rounded-xl flex items-center justify-center">
+      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z"/></svg>
     </div>
-    <nav class="flex-1 p-3 space-y-1">
-      <a onclick="showPage('shift')" class="nav-item active" id="nav-shift">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Shift
-      </a>
-      <a onclick="showPage('receive')" class="nav-item" id="nav-receive">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-        Réception
-      </a>
-      <a onclick="showPage('cash')" class="nav-item" id="nav-cash">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-        Petite caisse
-      </a>
-    </nav>
-    <div class="p-3 border-t border-gray-100">
-      <div class="flex items-center gap-2 px-3 py-2">
-        <div class="w-7 h-7 bg-green-100 rounded-full flex items-center justify-center">
-          <span class="text-green-700 text-xs font-medium" id="user-initials">FD</span>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="text-xs font-medium text-gray-900 truncate" id="user-name">Front Desk</div>
-        </div>
-        <button onclick="logout()" title="Déconnexion">
-          <svg class="w-4 h-4 text-gray-400 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        </button>
+    <span class="font-semibold text-gray-900 text-sm">fxloukess</span>
+  </div>
+  <nav class="flex-1 p-3 space-y-0.5">
+    <div class="nav-item active" onclick="nav('shift')" id="nav-shift">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Shift
+    </div>
+    <div class="nav-item" onclick="nav('receive')" id="nav-receive">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      Réception <span id="receive-badge" class="ml-auto text-xs bg-orange-100 text-orange-700 font-bold px-1.5 py-0.5 rounded-full hidden">0</span>
+    </div>
+    <div class="nav-item" onclick="nav('cash')" id="nav-cash">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+      Petite caisse
+    </div>
+  </nav>
+  <div class="p-3 border-t border-gray-100">
+    <div class="flex items-center gap-2 px-2 py-2">
+      <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+        <span class="text-green-700 text-xs font-bold" id="user-initials">FD</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-semibold text-gray-900 truncate" id="user-name">Front Desk</div>
+        <div class="text-xs text-gray-400">Accueil</div>
+      </div>
+      <button onclick="logout()" class="text-gray-300 hover:text-red-500 transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<main class="ml-52 p-6" id="content">
+
+  <!-- SHIFT -->
+  <div id="page-shift" class="active max-w-xl">
+    <div class="mb-6"><h1 class="text-xl font-semibold text-gray-900">Gestion du Shift</h1></div>
+
+    <div class="bg-white border border-gray-100 rounded-xl p-6 mb-4" id="shift-card">
+      <div class="flex justify-center py-4"><div class="w-5 h-5 border-2 border-gray-200 border-t-green-500 rounded-full animate-spin"></div></div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 hidden" id="shift-stats">
+      <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
+        <div class="text-2xl font-bold text-gray-900" id="sum-total">0</div>
+        <div class="text-xs text-gray-400 mt-1">Colis ce shift</div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
+        <div class="text-2xl font-bold text-green-600" id="sum-delivered">0</div>
+        <div class="text-xs text-gray-400 mt-1">Livrés</div>
+      </div>
+      <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
+        <div class="text-xl font-bold text-blue-600" id="sum-cod">0</div>
+        <div class="text-xs text-gray-400 mt-1">COD (DZD)</div>
       </div>
     </div>
   </div>
 
-  <div class="ml-52 p-6">
-
-    <!-- SHIFT PAGE -->
-    <div id="page-shift">
-      <div class="mb-6">
-        <h1 class="text-2xl font-medium text-gray-900">Gestion du Shift</h1>
-      </div>
-      <div id="shift-status" class="bg-white border border-gray-100 rounded-xl p-6 mb-4 max-w-lg">
-        <div class="text-sm text-gray-400 text-center py-4">Chargement...</div>
-      </div>
-      <div id="shift-summary" class="grid grid-cols-3 gap-4 max-w-lg hidden">
-        <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
-          <div class="text-2xl font-medium text-gray-900" id="sum-packages">0</div>
-          <div class="text-xs text-gray-400 mt-1">Colis ce shift</div>
-        </div>
-        <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
-          <div class="text-2xl font-medium text-green-600" id="sum-delivered">0</div>
-          <div class="text-xs text-gray-400 mt-1">Livrés</div>
-        </div>
-        <div class="bg-white border border-gray-100 rounded-xl p-4 text-center">
-          <div class="text-2xl font-medium text-blue-600" id="sum-cod">0</div>
-          <div class="text-xs text-gray-400 mt-1">COD DZD</div>
-        </div>
-      </div>
+  <!-- RECEIVE -->
+  <div id="page-receive">
+    <div class="mb-5 flex items-center justify-between">
+      <div><h1 class="text-xl font-semibold text-gray-900">Réception colis</h1><p class="text-sm text-gray-500 mt-0.5">Colis en zone d'accueil à mettre en rayon</p></div>
+      <button class="btn btn-ghost" onclick="loadReceive()">Rafraîchir</button>
     </div>
-
-    <!-- RECEIVE PAGE -->
-    <div id="page-receive" class="hidden">
-      <div class="mb-6 flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-medium text-gray-900">Réception colis</h1>
-          <p class="text-sm text-gray-500 mt-1">Colis en zone de réception</p>
-        </div>
-        <button onclick="loadReceive()" class="border border-gray-200 text-sm px-4 py-2 rounded-lg hover:bg-gray-50">Rafraîchir</button>
-      </div>
-      <div id="receive-list">
-        <div class="text-sm text-gray-400 text-center py-8">Chargement...</div>
-      </div>
+    <div class="bg-white border border-gray-100 rounded-xl overflow-hidden" id="receive-table">
+      <div class="text-center py-8 text-sm text-gray-400">Chargement…</div>
     </div>
+  </div>
 
-    <!-- CASH PAGE -->
-    <div id="page-cash" class="hidden">
-      <div class="mb-6">
-        <h1 class="text-2xl font-medium text-gray-900">Petite caisse</h1>
-      </div>
-      <div class="grid grid-cols-2 gap-6 max-w-2xl">
-        <div>
-          <div class="bg-white border border-gray-100 rounded-xl p-5 mb-4">
-            <h3 class="text-sm font-medium text-gray-900 mb-4">Nouvelle entrée</h3>
-            <div class="space-y-3">
-              <select id="cash-category" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="">Catégorie</option>
+  <!-- CASH -->
+  <div id="page-cash">
+    <div class="mb-5"><h1 class="text-xl font-semibold text-gray-900">Petite caisse</h1></div>
+    <div class="grid grid-cols-2 gap-5 max-w-2xl">
+      <div>
+        <div class="bg-white border border-gray-100 rounded-xl p-5">
+          <h3 class="text-sm font-semibold text-gray-900 mb-4">Nouvelle dépense</h3>
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Catégorie *</label>
+              <select class="select" id="cash-cat">
+                <option value="">Sélectionner…</option>
                 <option value="fournitures">Fournitures</option>
                 <option value="transport">Transport</option>
                 <option value="repas">Repas</option>
+                <option value="loyer">Loyer / charges</option>
+                <option value="reparation">Réparation</option>
                 <option value="autre">Autre</option>
               </select>
-              <input id="cash-amount" type="number" placeholder="Montant (DZD)" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <input id="cash-note" type="text" placeholder="Note" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-              <button onclick="saveCash()" class="w-full bg-green-500 hover:bg-green-600 text-white text-sm py-2 rounded-lg">Enregistrer</button>
             </div>
-          </div>
-        </div>
-        <div>
-          <div class="bg-white border border-gray-100 rounded-xl p-5">
-            <h3 class="text-sm font-medium text-gray-900 mb-4">Historique</h3>
-            <div id="cash-list"><div class="text-sm text-gray-400 text-center py-4">Chargement...</div></div>
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Montant (DZD) *</label>
+              <input class="input" id="cash-amount" type="number" min="1" placeholder="500">
+            </div>
+            <div>
+              <label class="text-xs text-gray-500 mb-1 block">Note *</label>
+              <input class="input" id="cash-note" placeholder="Achat papier A4…">
+            </div>
+            <button class="btn btn-green w-full justify-center" onclick="saveCash()">Enregistrer</button>
           </div>
         </div>
       </div>
+      <div>
+        <div class="bg-white border border-gray-100 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-gray-900">Historique shift</h3>
+            <span class="text-xs font-bold text-red-600" id="cash-total">0 DZD</span>
+          </div>
+          <div id="cash-list"><div class="text-sm text-gray-400 text-center py-4">Chargement…</div></div>
+        </div>
+      </div>
     </div>
-
   </div>
 
-  <script>
-    const token = localStorage.getItem('token')
-    if (!token) window.location.href = '/login'
+</main>
 
-    const name = localStorage.getItem('name') || 'FD'
-    document.getElementById('user-name').textContent = name
-    document.getElementById('user-initials').textContent = name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
+<script>
+const TOKEN = localStorage.getItem('token')
+if (!TOKEN) location.replace('/login')
 
-    function api(url, options={}) {
-      return fetch(url, {
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        ...options
-      }).then(r => r.ok ? r.json() : Promise.reject(r))
-    }
+const NAME = localStorage.getItem('name') || 'FD'
+document.getElementById('user-name').textContent = NAME
+document.getElementById('user-initials').textContent = NAME.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
 
-    function showPage(page) {
-      document.querySelectorAll('[id^="page-"]').forEach(el => el.classList.add('hidden'))
-      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'))
-      document.getElementById('page-' + page).classList.remove('hidden')
-      document.getElementById('nav-' + page).classList.add('active')
-      if (page === 'shift')   loadShift()
-      if (page === 'receive') loadReceive()
-      if (page === 'cash')    loadCash()
-    }
+function api(url, opts={}) {
+  opts.headers = {'Content-Type':'application/json', Authorization:'Bearer '+TOKEN, ...(opts.headers||{})}
+  return fetch(url, opts).then(r => {
+    if (r.status === 401) { localStorage.clear(); location.replace('/login') }
+    return r.ok ? r.json() : r.json().then(d=>{ throw new Error(d.detail||'Erreur') })
+  })
+}
 
-    async function loadShift() {
-      const [res, summary] = await Promise.all([
-        api('/api/frontdesk/shift'),
-        api('/api/frontdesk/shift/summary')
-      ])
-      const box = document.getElementById('shift-status')
-      const sumEl = document.getElementById('shift-summary')
+function toast(msg, type='ok') {
+  const el = document.createElement('div')
+  el.className = `toast ${type==='ok'?'bg-gray-900 text-white':'bg-red-600 text-white'}`
+  el.textContent = msg
+  document.body.appendChild(el)
+  setTimeout(()=>el.remove(), 3500)
+}
 
-      if (res.shift) {
-        const s = res.shift
-        box.innerHTML = `
-          <div class="flex items-center gap-3 mb-4">
-            <span class="w-3 h-3 bg-green-400 rounded-full animate-pulse"></span>
-            <span class="font-medium text-gray-900">Shift ouvert — ${s.shift_type}</span>
-          </div>
-          <div class="text-xs text-gray-400 mb-4">Ouvert le ${new Date(s.opened_at).toLocaleString('fr-DZ')}</div>
-          <button onclick="closeShift()" class="w-full border border-red-200 text-red-600 hover:bg-red-50 text-sm py-2 rounded-lg">Fermer le shift</button>
-        `
-        sumEl.classList.remove('hidden')
-        document.getElementById('sum-packages').textContent = summary.packages || 0
-        document.getElementById('sum-delivered').textContent = summary.delivered || 0
-        document.getElementById('sum-cod').textContent = Number(summary.cod || 0).toLocaleString('fr-DZ')
-      } else {
-        box.innerHTML = `
-          <div class="text-sm text-gray-500 mb-4">Aucun shift ouvert</div>
-          <select id="shift-type" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-3">
-            <option value="morning">Matin</option>
-            <option value="afternoon">Après-midi</option>
-            <option value="night">Nuit</option>
-          </select>
-          <button onclick="openShift()" class="w-full bg-green-500 hover:bg-green-600 text-white text-sm py-2 rounded-lg">Ouvrir un shift</button>
-        `
-        sumEl.classList.add('hidden')
-      }
-    }
+function nav(page) {
+  document.querySelectorAll('[id^="nav-"]').forEach(el=>el.classList.remove('active'))
+  document.querySelectorAll('#content > div').forEach(el=>el.classList.remove('active'))
+  document.getElementById('nav-'+page)?.classList.add('active')
+  document.getElementById('page-'+page)?.classList.add('active')
+  const loaders = { shift:loadShift, receive:loadReceive, cash:loadCash }
+  loaders[page]?.()
+}
 
-    async function openShift() {
-      const type = document.getElementById('shift-type')?.value || 'morning'
-      await api('/api/frontdesk/shift/open', { method:'POST', body: JSON.stringify({ shift_type: type }) })
-      loadShift()
-    }
+// ── Shift ─────────────────────────────────────────────────────────────────────
+async function loadShift() {
+  const [res, summary] = await Promise.all([
+    api('/api/frontdesk/shift'),
+    api('/api/frontdesk/shift/summary'),
+  ])
 
-    async function closeShift() {
-      if (!confirm('Fermer le shift ?')) return
-      const notes = prompt('Notes de clôture (optionnel):') || ''
-      await api('/api/frontdesk/shift/close', { method:'POST', body: JSON.stringify({ notes }) })
-      loadShift()
-    }
+  const card  = document.getElementById('shift-card')
+  const stats = document.getElementById('shift-stats')
 
-    async function loadReceive() {
-      const data = await api('/api/frontdesk/receive/pending')
-      const list = document.getElementById('receive-list')
-      if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-8">Aucun colis en réception</div>'; return }
-      list.innerHTML = `
-        <div class="bg-white border border-gray-100 rounded-xl overflow-hidden">
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Tracking</th>
-                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Destinataire</th>
-                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Wilaya</th>
-                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">COD</th>
-                <th class="text-left px-4 py-3 text-xs text-gray-400 uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-50">
-              ${data.map(p => `
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-3 font-mono text-xs font-bold">${p.tracking_id}</td>
-                  <td class="px-4 py-3 font-medium text-gray-900">${p.recipient_name}</td>
-                  <td class="px-4 py-3 text-gray-600">${p.wilaya}</td>
-                  <td class="px-4 py-3 font-medium text-green-600">${Number(p.cod_amount).toLocaleString()} DZD</td>
-                  <td class="px-4 py-3">
-                    <button onclick="shelve('${p.id}')" class="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded-lg">Mettre en rayon</button>
-                  </td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+  if (res.shift) {
+    const s = res.shift
+    const opened = new Date(s.opened_at).toLocaleString('fr-DZ')
+    card.innerHTML = `
+      <div class="flex items-center gap-3 mb-5">
+        <span class="w-3 h-3 bg-green-400 rounded-full animate-pulse flex-shrink-0"></span>
+        <div>
+          <div class="font-semibold text-gray-900">Shift ouvert — ${s.shift_type}</div>
+          <div class="text-xs text-gray-400 mt-0.5">Depuis le ${opened}</div>
         </div>
-      `
-    }
+      </div>
+      <button onclick="closeShift()" class="btn btn-red w-full justify-center">Fermer le shift</button>`
+    stats.classList.remove('hidden')
+    document.getElementById('sum-total').textContent     = summary.packages
+    document.getElementById('sum-delivered').textContent = summary.delivered
+    document.getElementById('sum-cod').textContent       = Number(summary.cod||0).toLocaleString('fr-DZ')
+  } else {
+    card.innerHTML = `
+      <div class="text-sm text-gray-500 mb-4 text-center">Aucun shift ouvert</div>
+      <div class="mb-3">
+        <label class="text-xs text-gray-500 mb-1 block">Type de shift</label>
+        <select class="select" id="shift-type">
+          <option value="morning">Matin (06h–14h)</option>
+          <option value="afternoon">Après-midi (14h–22h)</option>
+          <option value="night">Nuit (22h–06h)</option>
+        </select>
+      </div>
+      <button onclick="openShift()" class="btn btn-green w-full justify-center">Ouvrir un shift</button>`
+    stats.classList.add('hidden')
+  }
+}
 
-    async function shelve(id) {
-      await api(`/api/frontdesk/receive/${id}/shelve`, { method:'PATCH' })
-      loadReceive()
-    }
+async function openShift() {
+  const shift_type = document.getElementById('shift-type').value
+  try { await api('/api/frontdesk/shift/open',{method:'POST',body:JSON.stringify({shift_type})}); toast('Shift ouvert'); loadShift() }
+  catch(e) { toast(e.message,'err') }
+}
 
-    async function loadCash() {
-      const data = await api('/api/frontdesk/petty-cash')
-      const list = document.getElementById('cash-list')
-      if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">Aucune entrée</div>'; return }
-      list.innerHTML = data.map(e => `
-        <div class="flex justify-between py-2 border-b border-gray-50 last:border-0">
-          <div>
-            <div class="text-sm font-medium text-gray-900">${e.category}</div>
-            <div class="text-xs text-gray-400">${e.note}</div>
-          </div>
-          <div class="text-sm font-medium text-red-600">-${Number(e.amount).toLocaleString()} DZD</div>
-        </div>
-      `).join('')
-    }
+async function closeShift() {
+  if (!confirm('Fermer le shift en cours ?')) return
+  const notes = prompt('Notes de clôture (optionnel):') || ''
+  try { await api('/api/frontdesk/shift/close',{method:'POST',body:JSON.stringify({notes})}); toast('Shift fermé'); loadShift() }
+  catch(e) { toast(e.message,'err') }
+}
 
-    async function saveCash() {
-      const cat = document.getElementById('cash-category').value
-      const amt = document.getElementById('cash-amount').value
-      const note = document.getElementById('cash-note').value
-      if (!cat || !amt || !note) { alert('Remplissez tous les champs'); return }
-      await api('/api/frontdesk/petty-cash', { method:'POST', body: JSON.stringify({ category:cat, amount: parseFloat(amt), note }) })
-      document.getElementById('cash-amount').value = ''
-      document.getElementById('cash-note').value = ''
-      loadCash()
-    }
+// ── Receive ───────────────────────────────────────────────────────────────────
+async function loadReceive() {
+  const data = await api('/api/frontdesk/receive/pending')
+  const badge = document.getElementById('receive-badge')
+  if (data.length) { badge.textContent = data.length; badge.classList.remove('hidden') }
+  else badge.classList.add('hidden')
 
-    async function logout() {
-      await fetch('/api/auth/logout', { method:'POST' })
-      localStorage.clear()
-      window.location.href = '/login'
-    }
+  const el = document.getElementById('receive-table')
+  if (!data.length) {
+    el.innerHTML = '<div class="text-center py-8 text-sm text-gray-400">Aucun colis en zone d\'accueil</div>'
+    return
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>Tracking</th><th>Destinataire</th><th>Wilaya</th><th>COD</th><th>Fragile</th><th>Action</th></tr></thead>
+    <tbody>${data.map(p=>`
+      <tr>
+        <td class="font-mono text-xs font-bold">${p.tracking_id}</td>
+        <td><div class="font-medium">${p.recipient_name}</div><div class="text-xs text-gray-400">${p.recipient_phone}</div></td>
+        <td>${p.wilaya} — ${p.commune}</td>
+        <td class="font-semibold text-green-700">${p.cod_amount.toLocaleString('fr-DZ')} DZD</td>
+        <td>${p.is_fragile?'<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Fragile</span>':'—'}</td>
+        <td><button onclick="shelve('${p.id}')" class="btn btn-ghost text-xs py-1.5 px-3">Mettre en rayon</button></td>
+      </tr>`).join('')}</tbody>
+  </table>`
+}
 
-    loadShift()
-  </script>
+async function shelve(id) {
+  try { await api(`/api/frontdesk/receive/${id}/shelve`,{method:'PATCH'}); toast('Colis mis en rayon'); loadReceive() }
+  catch(e) { toast(e.message,'err') }
+}
+
+// ── Petty Cash ────────────────────────────────────────────────────────────────
+async function loadCash() {
+  const data = await api('/api/frontdesk/petty-cash')
+  const total = data.reduce((s,e)=>s+e.amount, 0)
+  document.getElementById('cash-total').textContent = total.toLocaleString('fr-DZ') + ' DZD'
+  const list = document.getElementById('cash-list')
+  if (!data.length) { list.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">Aucune dépense</div>'; return }
+  list.innerHTML = data.map(e=>`
+    <div class="flex justify-between items-start py-2 border-b border-gray-50 last:border-0">
+      <div>
+        <div class="text-xs font-semibold text-gray-800">${e.category}</div>
+        <div class="text-xs text-gray-400 mt-0.5">${e.note}</div>
+      </div>
+      <div class="text-sm font-bold text-red-600 flex-shrink-0 ml-3">${e.amount.toLocaleString('fr-DZ')} DZD</div>
+    </div>`).join('')
+}
+
+async function saveCash() {
+  const cat    = document.getElementById('cash-cat').value
+  const amount = document.getElementById('cash-amount').value
+  const note   = document.getElementById('cash-note').value.trim()
+  if (!cat)    { toast('Sélectionnez une catégorie','err'); return }
+  if (!amount || parseFloat(amount) <= 0) { toast('Montant invalide','err'); return }
+  if (!note)   { toast('Ajoutez une note','err'); return }
+  try {
+    await api('/api/frontdesk/petty-cash',{method:'POST',body:JSON.stringify({category:cat,amount:parseFloat(amount),note})})
+    toast('Dépense enregistrée')
+    document.getElementById('cash-cat').value = ''
+    document.getElementById('cash-amount').value = ''
+    document.getElementById('cash-note').value = ''
+    loadCash()
+  } catch(e) { toast(e.message,'err') }
+}
+
+async function logout() {
+  await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{})
+  localStorage.clear(); location.replace('/login')
+}
+
+loadShift()
+</script>
 </body>
 </html>
