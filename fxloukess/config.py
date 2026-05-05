@@ -60,6 +60,18 @@ COOKIE_PATH: str = _cookie_path(os.getenv("COOKIE_PATH"))
 
 if COOKIE_SAMESITE == "none":
     COOKIE_SECURE = True
+CORS_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if origin.strip()
+]
+
+# Cookie security
+COOKIE_SECURE: bool = _env_bool("COOKIE_SECURE", True)
+CSRF_PROTECT: bool = _env_bool("CSRF_PROTECT", True)
+COOKIE_SAMESITE: str = _cookie_samesite()
+COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/").strip() or "/"
+COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 
 # ── Station ───────────────────────────────────────────────────────────────────

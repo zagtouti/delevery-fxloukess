@@ -151,6 +151,7 @@ def _audit(db: Session, *, action: str, request: Request,
 @router.post("/login")
 @limiter.limit(LOGIN_RATE_LIMIT)
 async def login(request: Request, db: Session = Depends(get_db)):
+    await request.app.state.limiter._check_request_limit(request, LOGIN_RATE_LIMIT)
     body = await request.json()
     phone    = (body.get("phone") or "").strip()
     password = (body.get("password") or "").strip()
@@ -200,6 +201,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
     response.set_cookie(
         key="csrf_token", value=csrf_token,
         httponly=False, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
+        httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=max_age,
     )
     return response
 
