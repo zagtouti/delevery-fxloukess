@@ -3,6 +3,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _cookie_samesite() -> str:
+    raw = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+    return raw if raw in {"lax", "strict", "none"} else "lax"
+
+
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
@@ -29,10 +42,10 @@ CORS_ORIGINS: list[str] = [
 ]
 
 # Cookie security
-COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
-CSRF_PROTECT: bool = os.getenv("CSRF_PROTECT", "true").lower() == "true"
-COOKIE_SAMESITE: str = os.getenv("COOKIE_SAMESITE", "lax").lower()
-COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/")
+COOKIE_SECURE: bool = _env_bool("COOKIE_SECURE", True)
+CSRF_PROTECT: bool = _env_bool("CSRF_PROTECT", True)
+COOKIE_SAMESITE: str = _cookie_samesite()
+COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/").strip() or "/"
 
 
 # ── Station ───────────────────────────────────────────────────────────────────
