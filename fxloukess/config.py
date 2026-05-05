@@ -3,17 +3,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-def _env_bool(name: str, default: bool) -> bool:
-    value = os.getenv(name)
+# =========================
+# Helpers
+# =========================
+def _env_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _cookie_samesite() -> str:
-    raw = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
-    return raw if raw in {"lax", "strict", "none"} else "lax"
+def _cookie_samesite(value: str | None) -> str:
+    if not value:
+        return "lax"
+    normalized = value.strip().lower()
+    return normalized if normalized in {"lax", "strict", "none"} else "lax"
+
+
+def _cookie_path(value: str | None) -> str:
+    if not value:
+        return "/"
+    normalized = value.strip()
+    return normalized if normalized.startswith("/") else "/"
+
+
+def _cors_origins(value: str | None) -> list[str]:
+    if not value:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    origins = [v.strip() for v in value.split(",") if v.strip()]
+    return origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -35,6 +52,14 @@ DRIVER_TOKEN_EXPIRE_DAYS    = 365       # Drivers get long-lived tokens
 LOGIN_RATE_LIMIT = "10/minute"
 
 # CORS (comma-separated origins; default is local dev only)
+CORS_ORIGINS: list[str] = _cors_origins(os.getenv("CORS_ORIGINS"))
+COOKIE_SAMESITE: str = _cookie_samesite(os.getenv("COOKIE_SAMESITE"))
+COOKIE_SECURE: bool = _env_bool(os.getenv("COOKIE_SECURE"), default=False)
+CSRF_PROTECT: bool = _env_bool(os.getenv("CSRF_PROTECT"), default=True)
+COOKIE_PATH: str = _cookie_path(os.getenv("COOKIE_PATH"))
+
+if COOKIE_SAMESITE == "none":
+    COOKIE_SECURE = True
 CORS_ORIGINS: list[str] = [
     origin.strip()
     for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
@@ -46,6 +71,7 @@ COOKIE_SECURE: bool = _env_bool("COOKIE_SECURE", True)
 CSRF_PROTECT: bool = _env_bool("CSRF_PROTECT", True)
 COOKIE_SAMESITE: str = _cookie_samesite()
 COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/").strip() or "/"
+COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 
 # ── Station ───────────────────────────────────────────────────────────────────
