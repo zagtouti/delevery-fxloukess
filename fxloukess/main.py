@@ -85,6 +85,12 @@ async def driver_page():     return _html("driver.html")
 async def manager_page():    return _html("superadmin.html")
 @app.get("/track",      include_in_schema=False)
 async def track_page():      return _html("track.html")
+@app.get("/seller",     include_in_schema=False)
+async def seller_page():     return _html("seller.html")
+@app.get("/labels",     include_in_schema=False)
+async def labels_page():     return _html("labels.html")
+@app.get("/session-expired", include_in_schema=False)
+async def session_expired_page(): return _html("session_expired.html")
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -96,12 +102,20 @@ async def health():
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.exception_handler(404)
-async def not_found(_: Request, exc):
+async def not_found(request: Request, exc):
+    if "text/html" in request.headers.get("accept", ""):
+        response = _html("404.html")
+        response.status_code = 404
+        return response
     return JSONResponse(status_code=404, content={"detail": "Ressource introuvable"})
 
 @app.exception_handler(500)
 async def server_error(request: Request, exc: Exception):
     logger.error(f"500 {request.url}: {exc}", exc_info=True)
+    if "text/html" in request.headers.get("accept", ""):
+        response = _html("error.html")
+        response.status_code = 500
+        return response
     return JSONResponse(status_code=500, content={"detail": "Erreur serveur interne"})
 
 
