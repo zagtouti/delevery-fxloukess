@@ -21,6 +21,18 @@ DRIVER_TOKEN_EXPIRE_DAYS    = 365       # Drivers get long-lived tokens
 # Rate limiting (login)
 LOGIN_RATE_LIMIT = "10/minute"
 
+# CORS (comma-separated origins; default is local dev only)
+CORS_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if origin.strip()
+]
+
+# Cookie security
+COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
+CSRF_PROTECT: bool = os.getenv("CSRF_PROTECT", "true").lower() == "true"
+
+
 # ── Station ───────────────────────────────────────────────────────────────────
 STATION_CODE: str = os.getenv("STATION_CODE", "ORA")
 STATION_NAME: str = os.getenv("STATION_NAME", "PDEX Oran")

@@ -7,10 +7,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+from config import CORS_ORIGINS
 from database import check_connection, create_tables
 
 logging.basicConfig(
@@ -22,8 +22,6 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("fxloukess")
-
-limiter = Limiter(key_func=get_remote_address)
 
 for d in ["static/css", "static/js", "templates", "photos", "prints", "logs"]:
     os.makedirs(d, exist_ok=True)
@@ -49,11 +47,10 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,6 +109,7 @@ async def server_error(request: Request, exc: Exception):
 from routers import auth, dispatch, drivers, frontdesk, packages, returns, sellers, superadmin
 from routers import reports, labels
 
+app.state.limiter = auth.limiter
 app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
 app.include_router(packages.router,   prefix="/api/packages",   tags=["packages"])
 app.include_router(drivers.router,    prefix="/api/drivers",    tags=["drivers"])
