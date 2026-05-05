@@ -7,6 +7,7 @@ JWT stored in HttpOnly cookie (token is not returned in JSON payload).
 import hashlib
 import logging
 import secrets
+import hmac
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -40,9 +41,17 @@ def _extract_token(request: Request) -> str:
 def _validate_csrf(request: Request) -> None:
     if not CSRF_PROTECT:
         return
+
+    # Enforce CSRF checks only for cookie-authenticated browser requests.
+    token_cookie = (request.cookies.get("token") or "").strip()
+    if not token_cookie:
+        return
+
     csrf_cookie = (request.cookies.get("csrf_token") or "").strip()
     csrf_header = (request.headers.get("x-csrf-token") or "").strip()
-    if csrf_cookie and csrf_cookie != csrf_header:
+    if not csrf_cookie or not csrf_header:
+        raise HTTPException(status_code=403, detail="CSRF token requis")
+    if not hmac.compare_digest(csrf_cookie, csrf_header):
         raise HTTPException(status_code=403, detail="CSRF token invalide")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
