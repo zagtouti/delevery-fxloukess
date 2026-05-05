@@ -235,10 +235,12 @@ class DriverCashLog(Base):
     id            = Column(String, primary_key=True, default=_uuid)
     driver_id     = Column(String, ForeignKey("drivers.id"), nullable=False)
     package_id    = Column(String, ForeignKey("packages.id"), nullable=True)
+    package_ids   = Column(JSON, nullable=True)   # bulk collections (Payment plugin concept)
     action        = Column(String(50), nullable=False)
     amount        = Column(Float, nullable=False)
     old_balance   = Column(Float, nullable=False)
     new_balance   = Column(Float, nullable=False)
+    note          = Column(Text, nullable=True)
     confirmed_by  = Column(String, ForeignKey("users.id"), nullable=True)
     shift_id      = Column(String, ForeignKey("shifts.id"), nullable=True)
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
@@ -445,6 +447,26 @@ class AuditLog(Base):
     new_value   = Column(JSON, nullable=True)
     ip_address  = Column(String(50), nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ─────────────────────────── WILAYA PRICES ──────────────────────────────────
+
+class WilayaPrice(Base):
+    __tablename__ = "wilaya_prices"
+
+    id         = Column(String, primary_key=True, default=_uuid)
+    station_id = Column(String, ForeignKey("stations.id"), nullable=False)
+    wilaya     = Column(String(50), nullable=False)
+    home_price = Column(Integer, nullable=False)
+    desk_price = Column(Integer, nullable=False)
+    updated_by = Column(String, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(),
+                        onupdate=func.now())
+
+    __table_args__ = (
+        __import__("sqlalchemy").UniqueConstraint("station_id", "wilaya",
+                                                  name="uq_wilaya_price"),
+    )
 
 
 # ─────────────────────────── PRINT JOBS ─────────────────────────────────────

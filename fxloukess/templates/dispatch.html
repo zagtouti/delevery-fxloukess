@@ -71,6 +71,7 @@
       </div>
       <div class="flex items-center gap-3">
         <span class="text-sm text-gray-500 font-medium" id="sel-count">0 sélectionné(s)</span>
+        <button onclick="toggleGrouping()" id="group-btn" class="btn btn-ghost text-xs">📦 Par wilaya</button>
         <select class="select" id="driver-select">
           <option value="">Choisir un livreur…</option>
         </select>
@@ -132,15 +133,20 @@ function nav(page) {
 }
 
 // ── Assign ────────────────────────────────────────────────────────────────────
+let _grouped = false
+
+function toggleGrouping() {
+  _grouped = !_grouped
+  document.getElementById('group-btn').textContent = _grouped ? '📋 Liste plate' : '📦 Par wilaya'
+  loadAssign()
+}
+
 async function loadAssign() {
   selected.clear()
   updateSelCount()
-  const [pkgs, drivers] = await Promise.all([
-    api('/api/dispatch/ready'),
-    api('/api/drivers'),
-  ])
+  const endpoint = _grouped ? '/api/dispatch/ready/grouped' : '/api/dispatch/ready'
+  const [pkgs, drivers] = await Promise.all([api(endpoint), api('/api/drivers')])
 
-  // Populate driver dropdown
   const sel = document.getElementById('driver-select')
   sel.innerHTML = '<option value="">Choisir un livreur…</option>' +
     (drivers||[]).filter(d=>d.is_active).map(d=>`<option value="${d.id}">${d.full_name} — ${d.wilaya}</option>`).join('')
@@ -148,6 +154,34 @@ async function loadAssign() {
   const list = document.getElementById('ready-list')
   if (!pkgs?.length) {
     list.innerHTML = '<div class="text-center py-8 text-sm text-gray-400">Aucun colis prêt à dispatcher</div>'
+    return
+  }
+
+  if (_grouped) {
+    list.innerHTML = pkgs.map(g=>`
+      <div class="border-b border-gray-100 last:border-0">
+        <div class="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer" onclick="document.getElementById('wg-${g.wilaya}').classList.toggle('hidden')">
+          <div class="flex items-center gap-3">
+            <span class="font-semibold text-gray-900 text-sm">${g.wilaya}</span>
+            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">${g.count} colis</span>
+            <span class="text-xs text-gray-400">${g.cod_total.toLocaleString('fr-DZ')} DZD</span>
+          </div>
+          <button onclick="event.stopPropagation();g.packages.forEach(p=>{ if(!selected.has(p.id)) toggle(p.id) })" class="text-xs text-green-600 hover:underline">Tout sélectionner</button>
+        </div>
+        <div id="wg-${g.wilaya}" class="hidden">
+          ${g.packages.map(p=>`
+            <div class="pkg-row pl-8" id="row-${p.id}" onclick="toggle('${p.id}')">
+              <div class="w-5 h-5 border-2 border-gray-300 rounded flex items-center justify-center flex-shrink-0" id="chk-${p.id}"></div>
+              <div class="flex-1 min-w-0">
+                <span class="font-mono text-xs font-bold">${p.tracking_id}</span>${p.is_fragile?' <span class="text-xs text-orange-500">Fragile</span>':''}
+                <div class="text-sm font-medium text-gray-800">${p.recipient_name}</div>
+                <div class="text-xs text-gray-400">${p.commune} — ${p.address}</div>
+              </div>
+              <div class="font-bold text-green-700 text-sm">${p.cod_amount.toLocaleString('fr-DZ')} DZD</div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('')
+    window._pkgs = pkgs.flatMap(g=>g.packages)
     return
   }
 

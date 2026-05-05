@@ -1,4 +1,4 @@
-"""routers/superadmin.py — Users, stats, finance, alerts, audit, stations, wilaya prices."""
+"""routers/superadmin.py — v3. Uses utils.py, wilaya prices from DB."""
 import logging
 from datetime import datetime, timezone
 
@@ -11,17 +11,16 @@ from config import DEFAULT_WILAYA_PRICES
 from database import get_db
 from models import (
     Alert, AlertSeverityEnum, AuditLog, Driver, DriverCashLog,
-    LedgerEntryTypeEnum, Package, PackageStatusEnum, RoleEnum,
+    Package, PackageStatusEnum, RoleEnum,
     Seller, SellerLedgerEntry, Shift, Station, User, UserSession,
+    WilayaPrice,
 )
 from routers.auth import get_current_user, require_role
+from utils import audit, driver_cash_balance, ev
 
 logger = logging.getLogger("fxloukess.superadmin")
 router = APIRouter()
 _pwd   = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# In-memory price overrides (replace with DB table for persistence)
-_wilaya_prices = dict(DEFAULT_WILAYA_PRICES)
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -34,15 +33,7 @@ async def list_users(
     users = db.query(User).filter(
         User.station_id == current_user.station_id
     ).order_by(User.full_name).all()
-    return [{
-        "id":         u.id,
-        "full_name":  u.full_name,
-        "phone":      u.phone,
-        "role":       u.role.value if hasattr(u.role, "value") else u.role,
-        "is_active":  u.is_active,
-        "last_login": u.last_login.isoformat() if u.last_login else None,
-        "created_at": u.created_at.isoformat() if u.created_at else None,
-    } for u in users]
+    return [_fmt_user(u) for u in users]
 
 
 @router.post("/users")
@@ -55,12 +46,10 @@ async def create_user(
     for f in ["full_name", "phone", "role", "password"]:
         if not body.get(f):
             raise HTTPException(status_code=400, detail=f"Champ requis: {f}")
-
     if body["role"] not in [r.value for r in RoleEnum]:
         raise HTTPException(status_code=400, detail="Rôle invalide")
-
     if db.query(User).filter(User.phone == body["phone"]).first():
-        raise HTTPException(status_code=400, detail="Ce numéro est déjà utilisé")
+        raise HTTPException(status_code=400, detail="Numéro déjà utilisé")
 
     user = User(
         station_id      = current_user.station_id,
@@ -73,19 +62,12 @@ async def create_user(
     )
     db.add(user)
     db.flush()
-    db.add(AuditLog(
-        user_id=current_user.id, station_id=current_user.station_id,
-        action="user_created", entity_type="user", entity_id=user.id,
-        new_value={"full_name": user.full_name, "role": body["role"]},
-    ))
+    audit(db, action="user_created", user_id=current_user.id,
+          station_id=current_user.station_id, entity_type="user",
+          entity_id=user.id, new_value={"role": body["role"]})
     db.commit()
     db.refresh(user)
-    return {
-        "id": user.id, "full_name": user.full_name,
-        "phone": user.phone,
-        "role": user.role.value if hasattr(user.role, "value") else user.role,
-        "is_active": user.is_active,
-    }
+    return _fmt_user(user)
 
 
 @router.patch("/users/{user_id}/toggle")
@@ -100,6 +82,9 @@ async def toggle_user(
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Impossible de désactiver son propre compte")
     user.is_active = not user.is_active
+    audit(db, action="user_toggled", user_id=current_user.id,
+          station_id=current_user.station_id, entity_type="user",
+          entity_id=user_id, new_value={"is_active": user.is_active})
     db.commit()
     return {"id": user.id, "is_active": user.is_active}
 
@@ -113,10 +98,32 @@ async def force_logout(
     db.query(UserSession).filter(
         UserSession.user_id == user_id
     ).update({"is_active": False})
-    db.add(AuditLog(
-        user_id=current_user.id, station_id=current_user.station_id,
-        action="force_logout", entity_type="user", entity_id=user_id,
-    ))
+    audit(db, action="force_logout", user_id=current_user.id,
+          station_id=current_user.station_id, entity_type="user",
+          entity_id=user_id)
+    db.commit()
+    return {"success": True}
+
+
+@router.patch("/users/{user_id}/password")
+async def change_password(
+    user_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(RoleEnum.superadmin)),
+):
+    body = await request.json()
+    pw   = body.get("password", "")
+    if len(pw) < 6:
+        raise HTTPException(status_code=400, detail="Mot de passe trop court (min 6)")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable")
+    user.hashed_password = _pwd.hash(pw)
+    # Invalidate all sessions
+    db.query(UserSession).filter(UserSession.user_id == user_id).update({"is_active": False})
+    audit(db, action="password_changed", user_id=current_user.id,
+          station_id=current_user.station_id, entity_type="user", entity_id=user_id)
     db.commit()
     return {"success": True}
 
@@ -136,20 +143,19 @@ async def get_stats(
     out             = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.out_for_delivery).count()
     pending_receive = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.created).count()
     failed_today    = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.failed, Package.created_at >= today).count()
-    cod_pkgs        = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.delivered, Package.delivered_at >= today).all()
-    cod_today       = sum(p.cod_amount for p in cod_pkgs)
+    cod_today       = db.query(func.sum(Package.cod_amount)).filter(Package.station_id == sid, Package.status == PackageStatusEnum.delivered, Package.delivered_at >= today).scalar() or 0
     active_drivers  = db.query(Driver).filter(Driver.station_id == sid, Driver.is_active == True).count()
     open_alerts     = db.query(Alert).filter(Alert.station_id == sid, Alert.is_resolved == False).count()
 
     return {
-        "total_today":     total_today,
-        "delivered_today": delivered_today,
+        "total_today":      total_today,
+        "delivered_today":  delivered_today,
         "out_for_delivery": out,
-        "pending_receive": pending_receive,
-        "failed_today":    failed_today,
-        "cod_today":       cod_today,
-        "active_drivers":  active_drivers,
-        "open_alerts":     open_alerts,
+        "pending_receive":  pending_receive,
+        "failed_today":     failed_today,
+        "cod_today":        float(cod_today),
+        "active_drivers":   active_drivers,
+        "open_alerts":      open_alerts,
     }
 
 
@@ -163,13 +169,17 @@ async def get_finance(
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     sid   = current_user.station_id
 
-    delivered = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.delivered, Package.delivered_at >= today).all()
-    cod_today = sum(p.cod_amount for p in delivered)
+    cod_today = db.query(func.sum(Package.cod_amount)).filter(
+        Package.station_id == sid,
+        Package.status     == PackageStatusEnum.delivered,
+        Package.delivered_at >= today,
+    ).scalar() or 0
 
-    out_pkgs = db.query(Package).filter(Package.station_id == sid, Package.status == PackageStatusEnum.out_for_delivery).all()
-    cod_with_drivers = sum(p.cod_amount for p in out_pkgs)
+    cod_with_drivers = db.query(func.sum(Package.cod_amount)).filter(
+        Package.station_id == sid,
+        Package.status     == PackageStatusEnum.out_for_delivery,
+    ).scalar() or 0
 
-    # Pending seller payouts (positive balance = owed to seller)
     rows = db.query(
         SellerLedgerEntry.seller_id,
         func.sum(SellerLedgerEntry.amount).label("balance"),
@@ -182,20 +192,18 @@ async def get_finance(
     ).all()
     pending_payout = sum(r.balance for r in rows)
 
-    # Per-driver cash
     drivers = db.query(Driver).filter(Driver.station_id == sid, Driver.is_active == True).all()
     driver_cash = []
     for d in drivers:
-        log = db.query(DriverCashLog).filter(DriverCashLog.driver_id == d.id).order_by(DriverCashLog.created_at.desc()).first()
-        cash = log.new_balance if log else 0.0
+        cash = driver_cash_balance(db, d.id)
         if cash > 0:
             driver_cash.append({"driver_id": d.id, "name": d.full_name, "cash": cash})
 
     return {
-        "cod_today":       cod_today,
-        "cod_with_drivers": cod_with_drivers,
-        "pending_payout":  round(pending_payout, 2),
-        "driver_cash":     driver_cash,
+        "cod_today":        float(cod_today),
+        "cod_with_drivers": float(cod_with_drivers),
+        "pending_payout":   round(pending_payout, 2),
+        "driver_cash":      driver_cash,
     }
 
 
@@ -210,7 +218,6 @@ async def finance_sellers(
     ).outerjoin(SellerLedgerEntry, Seller.id == SellerLedgerEntry.seller_id).filter(
         Seller.station_id == current_user.station_id
     ).group_by(Seller.id).all()
-
     return [{
         "id":        s.id,
         "full_name": s.full_name,
@@ -227,7 +234,7 @@ async def list_alerts(
     current_user: User = Depends(get_current_user),
 ):
     alerts = db.query(Alert).filter(
-        Alert.station_id == current_user.station_id,
+        Alert.station_id  == current_user.station_id,
         Alert.is_resolved == False,
     ).order_by(Alert.created_at.desc()).all()
     return [_fmt_alert(a) for a in alerts]
@@ -243,10 +250,8 @@ async def create_alert(
     for f in ["title", "severity", "alert_type"]:
         if not body.get(f):
             raise HTTPException(status_code=400, detail=f"Champ requis: {f}")
-
     if body["severity"] not in [s.value for s in AlertSeverityEnum]:
         raise HTTPException(status_code=400, detail="Sévérité invalide")
-
     a = Alert(
         station_id=current_user.station_id,
         severity=body["severity"],
@@ -312,15 +317,10 @@ async def list_stations(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.superadmin)),
 ):
-    stations = db.query(Station).filter(Station.is_active == True).all()
     return [{
-        "id":        s.id,
-        "code":      s.code,
-        "name":      s.name,
-        "wilaya":    s.wilaya,
-        "phone":     s.phone,
-        "is_active": s.is_active,
-    } for s in stations]
+        "id": s.id, "code": s.code, "name": s.name,
+        "wilaya": s.wilaya, "phone": s.phone, "is_active": s.is_active,
+    } for s in db.query(Station).all()]
 
 
 @router.post("/stations")
@@ -333,29 +333,35 @@ async def create_station(
     for f in ["code", "name", "wilaya"]:
         if not body.get(f):
             raise HTTPException(status_code=400, detail=f"Champ requis: {f}")
-
     if db.query(Station).filter(Station.code == body["code"]).first():
-        raise HTTPException(status_code=400, detail="Code station déjà utilisé")
-
-    s = Station(
-        code=body["code"], name=body["name"], wilaya=body["wilaya"],
-        address=body.get("address"), phone=body.get("phone"), is_active=True,
-    )
+        raise HTTPException(status_code=400, detail="Code déjà utilisé")
+    s = Station(code=body["code"], name=body["name"], wilaya=body["wilaya"],
+                address=body.get("address"), phone=body.get("phone"), is_active=True)
     db.add(s)
     db.commit()
     db.refresh(s)
     return {"id": s.id, "code": s.code, "name": s.name}
 
 
-# ── Wilaya prices ─────────────────────────────────────────────────────────────
+# ── Wilaya prices (DB-backed, v3) ─────────────────────────────────────────────
 
 @router.get("/wilaya-prices")
-async def get_wilaya_prices(current_user: User = Depends(get_current_user)):
-    return _wilaya_prices
+async def get_wilaya_prices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rows = db.query(WilayaPrice).filter(
+        WilayaPrice.station_id == current_user.station_id
+    ).all()
+    # Merge defaults with DB overrides
+    prices = dict(DEFAULT_WILAYA_PRICES)
+    for r in rows:
+        prices[r.wilaya] = {"home": r.home_price, "desk": r.desk_price}
+    return prices
 
 
 @router.patch("/wilaya-prices")
-async def update_wilaya_prices(
+async def update_wilaya_price(
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(RoleEnum.superadmin)),
@@ -364,29 +370,54 @@ async def update_wilaya_prices(
     wilaya = body.get("wilaya")
     home   = body.get("home")
     desk   = body.get("desk")
-
     if not wilaya or home is None or desk is None:
-        raise HTTPException(status_code=400, detail="wilaya, home et desk requis")
+        raise HTTPException(status_code=400, detail="wilaya, home, desk requis")
 
-    _wilaya_prices[wilaya] = {"home": int(home), "desk": int(desk)}
-    db.add(AuditLog(
-        user_id=current_user.id, station_id=current_user.station_id,
-        action="wilaya_price_updated", entity_type="config",
-        new_value={"wilaya": wilaya, "home": home, "desk": desk},
-    ))
+    row = db.query(WilayaPrice).filter(
+        WilayaPrice.station_id == current_user.station_id,
+        WilayaPrice.wilaya     == wilaya,
+    ).first()
+    if row:
+        row.home_price = int(home)
+        row.desk_price = int(desk)
+        row.updated_by = current_user.id
+    else:
+        db.add(WilayaPrice(
+            station_id = current_user.station_id,
+            wilaya     = wilaya,
+            home_price = int(home),
+            desk_price = int(desk),
+            updated_by = current_user.id,
+        ))
+    audit(db, action="wilaya_price_updated", user_id=current_user.id,
+          station_id=current_user.station_id, entity_type="config",
+          new_value={"wilaya": wilaya, "home": home, "desk": desk})
     db.commit()
     return {"success": True, "wilaya": wilaya, "home": home, "desk": desk}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _fmt_user(u: User) -> dict:
+    return {
+        "id":         u.id,
+        "full_name":  u.full_name,
+        "phone":      u.phone,
+        "role":       ev(u.role),
+        "is_active":  u.is_active,
+        "last_login": u.last_login.isoformat() if u.last_login else None,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
 def _fmt_alert(a: Alert) -> dict:
     return {
         "id":              a.id,
-        "severity":        a.severity.value if hasattr(a.severity, "value") else a.severity,
+        "severity":        ev(a.severity),
         "alert_type":      a.alert_type,
         "title":           a.title,
         "description":     a.description,
+        "reference_id":    a.reference_id,
         "is_resolved":     a.is_resolved,
         "resolution_note": a.resolution_note,
         "created_at":      a.created_at.isoformat() if a.created_at else None,

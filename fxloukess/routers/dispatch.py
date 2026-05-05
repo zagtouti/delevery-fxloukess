@@ -1,63 +1,57 @@
-"""routers/dispatch.py — Assign packages to drivers, confirm departures."""
+"""routers/dispatch.py — v3. Uses utils. Adds wilaya grouping."""
 import logging
 from datetime import datetime, timezone
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models import (
-    AuditLog, Driver, DriverCashLog, Package, PackageHistory,
-    PackageStatusEnum, PhysicalLocationEnum, Shift, User,
-)
+from models import Driver, Package, PackageStatusEnum, PhysicalLocationEnum, User
 from routers.auth import get_current_user
+from utils import audit, ev, fmt_package, log_event, open_shift
 
 logger = logging.getLogger("fxloukess.dispatch")
 router = APIRouter()
 
-
-def _open_shift(db: Session, station_id: str) -> Shift | None:
-    return db.query(Shift).filter(
-        Shift.station_id == station_id, Shift.is_closed == False
-    ).first()
-
-
-def _fmt_pkg(p: Package) -> dict:
-    return {
-        "id":              p.id,
-        "tracking_id":     p.tracking_id,
-        "recipient_name":  p.recipient_name,
-        "recipient_phone": p.recipient_phone,
-        "wilaya":          p.wilaya,
-        "commune":         p.commune,
-        "address":         p.address,
-        "cod_amount":      p.cod_amount,
-        "is_fragile":      p.is_fragile,
-        "status":          p.status.value if hasattr(p.status, "value") else p.status,
-        "physical_location": p.physical_location.value if hasattr(p.physical_location, "value") else p.physical_location,
-        "driver_id":       p.driver_id,
-        "created_at":      p.created_at.isoformat() if p.created_at else None,
-    }
-
-
-# ── Ready queue ───────────────────────────────────────────────────────────────
 
 @router.get("/ready")
 async def ready_for_dispatch(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Packages shelved and waiting to be assigned to a driver."""
     pkgs = db.query(Package).filter(
-        Package.station_id == current_user.station_id,
-        Package.status == PackageStatusEnum.created,
+        Package.station_id        == current_user.station_id,
+        Package.status            == PackageStatusEnum.created,
         Package.physical_location == PhysicalLocationEnum.shelf,
-        Package.is_archived == False,
-    ).order_by(Package.created_at.asc()).all()
-    return [_fmt_pkg(p) for p in pkgs]
+        Package.is_archived       == False,
+    ).order_by(Package.wilaya, Package.created_at.asc()).all()
+    return [fmt_package(p) for p in pkgs]
 
 
-# ── Assign ────────────────────────────────────────────────────────────────────
+@router.get("/ready/grouped")
+async def ready_grouped_by_wilaya(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """NEW v3 — packages grouped by wilaya for easier bag building."""
+    pkgs = db.query(Package).filter(
+        Package.station_id        == current_user.station_id,
+        Package.status            == PackageStatusEnum.created,
+        Package.physical_location == PhysicalLocationEnum.shelf,
+        Package.is_archived       == False,
+    ).order_by(Package.wilaya, Package.created_at.asc()).all()
+
+    groups: dict[str, dict] = defaultdict(lambda: {"wilaya": "", "count": 0, "cod_total": 0.0, "packages": []})
+    for p in pkgs:
+        w = p.wilaya
+        groups[w]["wilaya"]    = w
+        groups[w]["count"]    += 1
+        groups[w]["cod_total"] = round(groups[w]["cod_total"] + p.cod_amount, 2)
+        groups[w]["packages"].append(fmt_package(p))
+
+    return sorted(groups.values(), key=lambda g: g["count"], reverse=True)
+
 
 @router.post("/assign")
 async def assign_packages(
@@ -75,44 +69,39 @@ async def assign_packages(
     driver = db.query(Driver).filter(
         Driver.id == driver_id,
         Driver.station_id == current_user.station_id,
-        Driver.is_active == True,
+        Driver.is_active  == True,
     ).first()
     if not driver:
         raise HTTPException(status_code=404, detail="Livreur introuvable ou inactif")
 
-    shift    = _open_shift(db, current_user.station_id)
+    shift    = open_shift(db, current_user.station_id)
     assigned = []
 
     for pid in package_ids:
         pkg = db.query(Package).filter(
-            Package.id == pid,
+            Package.id         == pid,
             Package.station_id == current_user.station_id,
             Package.is_archived == False,
         ).first()
         if not pkg:
             continue
-        old = pkg.status.value if hasattr(pkg.status, "value") else pkg.status
-        pkg.driver_id        = driver_id
-        pkg.status           = PackageStatusEnum.assigned
+        old = ev(pkg.status)
+        pkg.driver_id         = driver_id
+        pkg.status            = PackageStatusEnum.assigned
         pkg.physical_location = PhysicalLocationEnum.dispatch_bag
-        db.add(PackageHistory(
-            package_id=pkg.id, user_id=current_user.id,
-            shift_id=shift.id if shift else None,
-            old_status=old, new_status="assigned",
-            note=f"Assigné — {driver.full_name}",
-        ))
+        log_event(db, package_id=pkg.id, user_id=current_user.id,
+                  shift_id=shift.id if shift else None,
+                  old_status=old, new_status="assigned",
+                  note=f"Assigné — {driver.full_name}")
         assigned.append(pkg.tracking_id)
 
-    db.add(AuditLog(
-        user_id=current_user.id, station_id=current_user.station_id,
-        action="packages_assigned", entity_type="driver", entity_id=driver_id,
-        new_value={"count": len(assigned), "tracking_ids": assigned},
-    ))
+    audit(db, action="packages_assigned", user_id=current_user.id,
+          station_id=current_user.station_id,
+          entity_type="driver", entity_id=driver_id,
+          new_value={"count": len(assigned), "tracking_ids": assigned})
     db.commit()
     return {"success": True, "assigned": len(assigned), "tracking_ids": assigned}
 
-
-# ── Driver bag ────────────────────────────────────────────────────────────────
 
 @router.get("/driver/{driver_id}/bag")
 async def driver_bag(
@@ -121,18 +110,13 @@ async def driver_bag(
     current_user: User = Depends(get_current_user),
 ):
     pkgs = db.query(Package).filter(
-        Package.driver_id == driver_id,
+        Package.driver_id  == driver_id,
         Package.station_id == current_user.station_id,
-        Package.status.in_([
-            PackageStatusEnum.assigned,
-            PackageStatusEnum.out_for_delivery,
-        ]),
+        Package.status.in_([PackageStatusEnum.assigned, PackageStatusEnum.out_for_delivery]),
         Package.is_archived == False,
-    ).all()
-    return [_fmt_pkg(p) for p in pkgs]
+    ).order_by(Package.wilaya).all()
+    return [fmt_package(p) for p in pkgs]
 
-
-# ── Confirm departure ─────────────────────────────────────────────────────────
 
 @router.post("/driver/{driver_id}/depart")
 async def driver_depart(
@@ -140,13 +124,12 @@ async def driver_depart(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Bulk-move all *assigned* packages to out_for_delivery when driver leaves."""
-    shift = _open_shift(db, current_user.station_id)
-
-    pkgs = db.query(Package).filter(
-        Package.driver_id == driver_id,
+    """Bulk move all assigned packages to out_for_delivery."""
+    shift = open_shift(db, current_user.station_id)
+    pkgs  = db.query(Package).filter(
+        Package.driver_id  == driver_id,
         Package.station_id == current_user.station_id,
-        Package.status == PackageStatusEnum.assigned,
+        Package.status     == PackageStatusEnum.assigned,
     ).all()
 
     now = datetime.now(timezone.utc)
@@ -156,11 +139,13 @@ async def driver_depart(
         pkg.attempts         += 1
         if not pkg.first_attempt_at:
             pkg.first_attempt_at = now
-        db.add(PackageHistory(
-            package_id=pkg.id, user_id=current_user.id,
-            shift_id=shift.id if shift else None,
-            old_status="assigned", new_status="out_for_delivery",
-        ))
+        log_event(db, package_id=pkg.id, user_id=current_user.id,
+                  shift_id=shift.id if shift else None,
+                  old_status="assigned", new_status="out_for_delivery")
 
+    audit(db, action="driver_departed", user_id=current_user.id,
+          station_id=current_user.station_id,
+          entity_type="driver", entity_id=driver_id,
+          new_value={"count": len(pkgs)})
     db.commit()
     return {"success": True, "count": len(pkgs)}
