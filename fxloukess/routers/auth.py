@@ -14,7 +14,10 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DRIVER_TOKEN_EXPIRE_DAYS
+from config import (
+    SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DRIVER_TOKEN_EXPIRE_DAYS,
+    LOGIN_RATE_LIMIT, COOKIE_SECURE,
+)
 from database import get_db
 from models import AuditLog, RoleEnum, User, UserSession
 
@@ -80,6 +83,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
 
+    expected_fp = session.device_fingerprint
+    if expected_fp and user.role != RoleEnum.driver and expected_fp != _device_fp(request):
+        session.is_active = False
+        db.commit()
+        raise HTTPException(status_code=401, detail="Session invalide pour cet appareil")
+
     session.last_active = datetime.now(timezone.utc)
     db.commit()
     return user
@@ -111,6 +120,7 @@ def _audit(db: Session, *, action: str, request: Request,
 
 @router.post("/login")
 async def login(request: Request, db: Session = Depends(get_db)):
+    await request.app.state.limiter._check_request_limit(request, LOGIN_RATE_LIMIT)
     body = await request.json()
     phone    = (body.get("phone") or "").strip()
     password = (body.get("password") or "").strip()
@@ -149,13 +159,12 @@ async def login(request: Request, db: Session = Depends(get_db)):
         "success":    True,
         "role":       role_val,
         "name":       user.full_name,
-        "token":      token,
         "station_id": user.station_id,
     })
     max_age = 60 * 60 * 24 * DRIVER_TOKEN_EXPIRE_DAYS if role_val == "driver" else 60 * ACCESS_TOKEN_EXPIRE_MINUTES
     response.set_cookie(
         key="token", value=token,
-        httponly=True, samesite="lax", max_age=max_age,
+        httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=max_age,
     )
     return response
 
