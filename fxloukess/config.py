@@ -31,6 +31,8 @@ CORS_ORIGINS: list[str] = [
 # Cookie security
 COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 CSRF_PROTECT: bool = os.getenv("CSRF_PROTECT", "true").lower() == "true"
+COOKIE_SAMESITE: str = os.getenv("COOKIE_SAMESITE", "lax").lower()
+COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/")
 
 
 # ── Station ───────────────────────────────────────────────────────────────────

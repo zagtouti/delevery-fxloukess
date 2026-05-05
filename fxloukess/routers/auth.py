@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from config import (
     SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DRIVER_TOKEN_EXPIRE_DAYS,
-    LOGIN_RATE_LIMIT, COOKIE_SECURE, CSRF_PROTECT,
+    LOGIN_RATE_LIMIT, COOKIE_SECURE, CSRF_PROTECT, COOKIE_SAMESITE, COOKIE_PATH,
 )
 from database import get_db
 from models import AuditLog, RoleEnum, User, UserSession
@@ -194,12 +194,12 @@ async def login(request: Request, db: Session = Depends(get_db)):
     max_age = 60 * 60 * 24 * DRIVER_TOKEN_EXPIRE_DAYS if role_val == "driver" else 60 * ACCESS_TOKEN_EXPIRE_MINUTES
     response.set_cookie(
         key="token", value=token,
-        httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=max_age, path="/",
+        httponly=True, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
     )
     csrf_token = secrets.token_urlsafe(24)
     response.set_cookie(
         key="csrf_token", value=csrf_token,
-        httponly=False, secure=COOKIE_SECURE, samesite="lax", max_age=max_age, path="/",
+        httponly=False, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
     )
     return response
 
@@ -212,8 +212,8 @@ async def logout(request: Request, db: Session = Depends(get_db)):
         db.query(UserSession).filter(UserSession.token == token).update({"is_active": False})
         db.commit()
     response = JSONResponse(content={"success": True})
-    response.delete_cookie("token", path="/")
-    response.delete_cookie("csrf_token", path="/")
+    response.delete_cookie("token", path=COOKIE_PATH)
+    response.delete_cookie("csrf_token", path=COOKIE_PATH)
     return response
 
 
@@ -243,8 +243,8 @@ async def report_stolen(request: Request, db: Session = Depends(get_db)):
     db.commit()
 
     response = JSONResponse(content={"success": True, "message": "Toutes les sessions invalidées"})
-    response.delete_cookie("token", path="/")
-    response.delete_cookie("csrf_token", path="/")
+    response.delete_cookie("token", path=COOKIE_PATH)
+    response.delete_cookie("csrf_token", path=COOKIE_PATH)
     return response
 
 
