@@ -2,25 +2,57 @@
 routers/auth.py
 Authentication: login, logout, me, stolen-device report.
 Rate-limited login (10/min per IP via slowapi).
-JWT stored in HttpOnly cookie AND returned as Bearer token for JS clients.
+JWT stored in HttpOnly cookie (token is not returned in JSON payload).
 """
 import hashlib
 import logging
+import secrets
+import hmac
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from fastapi.responses import JSONResponse
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DRIVER_TOKEN_EXPIRE_DAYS
+from config import (
+    SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES, DRIVER_TOKEN_EXPIRE_DAYS,
+    LOGIN_RATE_LIMIT, COOKIE_SECURE, CSRF_PROTECT, COOKIE_SAMESITE, COOKIE_PATH,
+)
 from database import get_db
 from models import AuditLog, RoleEnum, User, UserSession
 
 logger = logging.getLogger("fxloukess.auth")
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def _extract_token(request: Request) -> str:
+    auth_header = request.headers.get("Authorization", "").strip()
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return (request.cookies.get("token") or "").strip()
+
+
+def _validate_csrf(request: Request) -> None:
+    if not CSRF_PROTECT:
+        return
+
+    # Enforce CSRF checks only for cookie-authenticated browser requests.
+    token_cookie = (request.cookies.get("token") or "").strip()
+    if not token_cookie:
+        return
+
+    csrf_cookie = (request.cookies.get("csrf_token") or "").strip()
+    csrf_header = (request.headers.get("x-csrf-token") or "").strip()
+    if not csrf_cookie or not csrf_header:
+        raise HTTPException(status_code=403, detail="CSRF token requis")
+    if not hmac.compare_digest(csrf_cookie, csrf_header):
+        raise HTTPException(status_code=403, detail="CSRF token invalide")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -33,7 +65,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def _device_fp(request: Request) -> str:
-    raw = f"{request.headers.get('user-agent', '')}{request.client.host}"
+    """Stable-ish fingerprint: prefer explicit device header, avoid volatile IP binding."""
+    device_id = request.headers.get("x-device-id", "").strip()
+    user_agent = request.headers.get("user-agent", "").strip()
+    accept_lang = request.headers.get("accept-language", "").strip()
+    raw = f"{device_id}|{user_agent}|{accept_lang}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -53,10 +89,7 @@ def _make_token(user: User) -> str:
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """FastAPI dependency — validates JWT + session; returns User."""
-    token = (
-        request.cookies.get("token")
-        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    )
+    token = _extract_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Non authentifié")
 
@@ -79,6 +112,12 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=401, detail="Utilisateur introuvable")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Compte désactivé")
+
+    expected_fp = session.device_fingerprint
+    if expected_fp and user.role != RoleEnum.driver and expected_fp != _device_fp(request):
+        session.is_active = False
+        db.commit()
+        raise HTTPException(status_code=401, detail="Session invalide pour cet appareil")
 
     session.last_active = datetime.now(timezone.utc)
     db.commit()
@@ -110,6 +149,7 @@ def _audit(db: Session, *, action: str, request: Request,
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/login")
+@limiter.limit(LOGIN_RATE_LIMIT)
 async def login(request: Request, db: Session = Depends(get_db)):
     body = await request.json()
     phone    = (body.get("phone") or "").strip()
@@ -149,38 +189,39 @@ async def login(request: Request, db: Session = Depends(get_db)):
         "success":    True,
         "role":       role_val,
         "name":       user.full_name,
-        "token":      token,
         "station_id": user.station_id,
     })
     max_age = 60 * 60 * 24 * DRIVER_TOKEN_EXPIRE_DAYS if role_val == "driver" else 60 * ACCESS_TOKEN_EXPIRE_MINUTES
     response.set_cookie(
         key="token", value=token,
-        httponly=True, samesite="lax", max_age=max_age,
+        httponly=True, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
+    )
+    csrf_token = secrets.token_urlsafe(24)
+    response.set_cookie(
+        key="csrf_token", value=csrf_token,
+        httponly=False, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
     )
     return response
 
 
 @router.post("/logout")
 async def logout(request: Request, db: Session = Depends(get_db)):
-    token = (
-        request.cookies.get("token")
-        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    )
+    _validate_csrf(request)
+    token = _extract_token(request)
     if token:
         db.query(UserSession).filter(UserSession.token == token).update({"is_active": False})
         db.commit()
     response = JSONResponse(content={"success": True})
-    response.delete_cookie("token")
+    response.delete_cookie("token", path=COOKIE_PATH)
+    response.delete_cookie("csrf_token", path=COOKIE_PATH)
     return response
 
 
 @router.post("/report-stolen")
 async def report_stolen(request: Request, db: Session = Depends(get_db)):
     """Invalidate ALL sessions for the current user (lost/stolen device)."""
-    token = (
-        request.cookies.get("token")
-        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    )
+    _validate_csrf(request)
+    token = _extract_token(request)
     if not token:
         raise HTTPException(status_code=401, detail="Non authentifié")
     try:
@@ -188,15 +229,22 @@ async def report_stolen(request: Request, db: Session = Depends(get_db)):
     except JWTError:
         raise HTTPException(status_code=401, detail="Token invalide")
 
-    db.query(UserSession).filter(
-        UserSession.user_id == payload["user_id"]
-    ).update({"is_active": False})
+    active_session = (
+        db.query(UserSession)
+        .filter(UserSession.token == token, UserSession.user_id == payload["user_id"], UserSession.is_active == True)
+        .first()
+    )
+    if not active_session:
+        raise HTTPException(status_code=401, detail="Session expirée")
+
+    db.query(UserSession).filter(UserSession.user_id == payload["user_id"]).update({"is_active": False})
     _audit(db, action="stolen_device_report", request=request,
            user_id=payload["user_id"], entity_type="user", entity_id=payload["user_id"])
     db.commit()
 
     response = JSONResponse(content={"success": True, "message": "Toutes les sessions invalidées"})
-    response.delete_cookie("token")
+    response.delete_cookie("token", path=COOKIE_PATH)
+    response.delete_cookie("csrf_token", path=COOKIE_PATH)
     return response
 
 

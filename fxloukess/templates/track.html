@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Suivi de colis — fxloukess</title>
+<script>tailwind={config:{darkMode:"class"}}</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif}
   .input{width:100%;border:2px solid #e5e7eb;border-radius:12px;padding:14px 18px;font-size:15px;outline:none;transition:border .15s;letter-spacing:.05em}
@@ -55,21 +58,29 @@
     const STATUS_LABEL = {
       created:'Enregistré', assigned:'Assigné', out_for_delivery:'En livraison',
       delivered:'Livré', failed:'Tentative échouée', returned:'Retourné',
-      rescheduled:'Reprogrammé', waiting_for_client:'En attente du client',
-      held_at_station:'En attente en station', lost:'Perdu',
+      rescheduled:'Reprogrammé', address_changed:'Adresse changée',
+      waiting_for_client:'En attente du client', held_at_station:'En attente en station',
+      partially_delivered:'Partiellement livré', lost:'Perdu', sync_conflict:'Conflit de synchronisation'
     }
     const STATUS_CLR = {
-      delivered:'bg-green-100 text-green-700',
-      out_for_delivery:'bg-orange-100 text-orange-700',
-      failed:'bg-red-100 text-red-700',
-      returned:'bg-gray-100 text-gray-600',
-      rescheduled:'bg-yellow-100 text-yellow-700',
+      delivered:'bg-green-100 text-green-700', out_for_delivery:'bg-orange-100 text-orange-700',
+      failed:'bg-red-100 text-red-700', returned:'bg-gray-100 text-gray-600',
+      rescheduled:'bg-yellow-100 text-yellow-700', waiting_for_client:'bg-blue-100 text-blue-700',
+      held_at_station:'bg-purple-100 text-purple-700', lost:'bg-black text-white'
     }
     const STEPS = [
-      {key:'created',        label:'Colis enregistré',      icon:'📦'},
-      {key:'assigned',       label:'Assigné à un livreur',  icon:'🚴'},
-      {key:'out_for_delivery',label:'En cours de livraison',icon:'🛵'},
-      {key:'delivered',      label:'Livré',                 icon:'✅'},
+      {key:'created',label:'Colis enregistré',icon:'📦'},
+      {key:'assigned',label:'Assigné',icon:'🚴'},
+      {key:'out_for_delivery',label:'En livraison',icon:'🛵'},
+      {key:'waiting_for_client',label:'En attente client',icon:'⏳'},
+      {key:'rescheduled',label:'Reprogrammé',icon:'📅'},
+      {key:'address_changed',label:'Adresse changée',icon:'✏️'},
+      {key:'held_at_station',label:'En station',icon:'🏬'},
+      {key:'partially_delivered',label:'Partiellement livré',icon:'◐'},
+      {key:'delivered',label:'Livré',icon:'✅'},
+      {key:'failed',label:'Échec',icon:'⚠️'},
+      {key:'returned',label:'Retourné',icon:'↩️'},
+      {key:'lost',label:'Perdu',icon:'❌'},
     ]
 
     async function track() {
@@ -143,7 +154,7 @@
               <div class="font-mono font-bold text-gray-900 text-lg">${p.tracking_id}</div>
               <div class="text-sm text-gray-500 mt-0.5">${p.recipient_name} — ${p.wilaya}</div>
             </div>
-            <span class="inline-flex px-3 py-1 rounded-full text-xs font-semibold ${clr}">${STATUS_LABEL[status]||status}</span>
+            <div class="flex flex-col items-end gap-2"><span class="inline-flex px-3 py-1 rounded-full text-xs font-semibold ${clr}">${STATUS_LABEL[status]||status}</span><button class="text-xs text-green-600 hover:underline" onclick="copyText(location.href)">Partager / copier lien</button></div>
           </div>
 
           ${['failed','returned','lost'].includes(status) ? `
@@ -155,6 +166,7 @@
 
           <div class="grid grid-cols-2 gap-3 text-sm border-t pt-4">
             <div><div class="text-xs text-gray-400">Enregistré le</div><div class="font-medium">${p.created_at?new Date(p.created_at).toLocaleDateString('fr-DZ'):'—'}</div></div>
+            ${p.estimated_delivery_date?`<div><div class="text-xs text-gray-400">Livraison estimée</div><div class="font-medium text-blue-700">${new Date(p.estimated_delivery_date).toLocaleDateString('fr-DZ')}</div></div>`:''}
             ${p.delivered_at?`<div><div class="text-xs text-gray-400">Livré le</div><div class="font-medium text-green-700">${new Date(p.delivered_at).toLocaleDateString('fr-DZ')}</div></div>`:''}
             <div><div class="text-xs text-gray-400">Tentatives</div><div class="font-medium">${p.attempts}</div></div>
           </div>

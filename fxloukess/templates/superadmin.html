@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>fxloukess — Superadmin</title>
+<script>tailwind={config:{darkMode:"class"}}</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif}
   .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#6b7280;cursor:pointer;transition:all .15s;user-select:none}
@@ -33,7 +36,7 @@
   #content>div.active{display:block}
 </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 dark:bg-gray-950 min-h-screen dark:text-gray-100">
 
 <!-- Sidebar -->
 <aside class="fixed left-0 top-0 h-full w-56 bg-white border-r border-gray-100 flex flex-col z-10">
@@ -109,7 +112,7 @@
 
     <!-- ── DASHBOARD ───────────────────────────────────────── -->
     <div id="page-dashboard" class="active">
-      <div class="mb-6"><h1 class="text-xl font-semibold text-gray-900">Tableau de bord</h1><p class="text-sm text-gray-500 mt-0.5">Vue d'ensemble du jour</p></div>
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-3"><div><h1 class="text-xl font-semibold text-gray-900">Tableau de bord</h1><p class="text-sm text-gray-500 mt-0.5">Vue d'ensemble</p></div><div class="flex gap-2 items-end"><label class="text-xs text-gray-500">Du<input id="dash-from" type="date" class="input mt-1"></label><label class="text-xs text-gray-500">Au<input id="dash-to" type="date" class="input mt-1"></label><button class="btn btn-ghost" onclick="loadDashboard()">Appliquer</button><label class="text-xs text-gray-500 flex items-center gap-1"><input id="dash-auto" type="checkbox" checked> Auto-refresh</label></div></div>
       <div class="grid grid-cols-4 gap-4 mb-6" id="stats-grid">
         <div class="stat-card"><div class="text-xs text-gray-400 mb-1">Colis aujourd'hui</div><div class="text-3xl font-bold text-gray-900" id="st-total">—</div></div>
         <div class="stat-card"><div class="text-xs text-gray-400 mb-1">Livrés</div><div class="text-3xl font-bold text-green-600" id="st-delivered">—</div></div>
@@ -214,7 +217,7 @@
     <div id="page-alerts">
       <div class="mb-5 flex items-center justify-between">
         <h1 class="text-xl font-semibold text-gray-900">Alertes</h1>
-        <button class="btn btn-ghost" onclick="loadAlerts()">Rafraîchir</button>
+        <div class="flex gap-2"><button class="btn btn-red" onclick="bulkResolveAlerts()">Marquer résolues</button><button class="btn btn-ghost" onclick="loadAlerts()">Rafraîchir</button></div>
       </div>
       <div id="alerts-list"><div class="text-center py-8 text-sm text-gray-400">Chargement…</div></div>
     </div>
@@ -259,7 +262,7 @@
 <script>
 // ── Auth guard ────────────────────────────────────────────────────────────────
 const TOKEN = localStorage.getItem('token')
-if (!TOKEN) location.replace('/login')
+if (!TOKEN) console.info('Using cookie-based session')
 
 const NAME = localStorage.getItem('name') || 'Admin'
 document.getElementById('user-name').textContent = NAME
@@ -267,9 +270,9 @@ document.getElementById('user-initials').textContent = NAME.split(' ').map(w=>w[
 
 // ── API helper ────────────────────────────────────────────────────────────────
 async function api(url, opts = {}) {
-  opts.headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN, ...(opts.headers || {}) }
+  opts.headers = authHeaders(opts.headers || {})
   const r = await fetch(url, opts)
-  if (r.status === 401) { localStorage.clear(); location.replace('/login'); return null }
+  if (r.status === 401) { sessionExpired(); return null }
   return r.ok ? r.json() : r.json().then(d => { throw new Error(d.detail || 'Erreur') })
 }
 
@@ -326,7 +329,8 @@ function closeModal() {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
-  const d = await api('/api/superadmin/stats')
+  const params = new URLSearchParams({date_from:document.getElementById('dash-from')?.value||'',date_to:document.getElementById('dash-to')?.value||''})
+  const d = await api('/api/superadmin/stats?'+params)
   if (!d) return
   document.getElementById('st-total').textContent     = d.total_today
   document.getElementById('st-delivered').textContent = d.delivered_today
@@ -506,7 +510,8 @@ async function detailModal(title, body, footer, pkgId) {
         </div>
       </div>` : ''}
     </div>`
-  footer.innerHTML = '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+  footer.innerHTML = '<button class="btn btn-blue" onclick="exportLedgerCsv()">Export CSV</button><button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+  window._ledgerEntries = entries
 }
 
 // ── Drivers ───────────────────────────────────────────────────────────────────
@@ -614,7 +619,8 @@ async function ledgerModal(title, body, footer, arg) {
           <td class="text-xs text-gray-400">${e.created_at?new Date(e.created_at).toLocaleDateString('fr-DZ'):''}</td>
         </tr>`).join('')}</tbody>
     </table>`
-  footer.innerHTML = '<button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+  footer.innerHTML = '<button class="btn btn-blue" onclick="exportLedgerCsv()">Export CSV</button><button class="btn btn-ghost" onclick="closeModal()">Fermer</button>'
+  window._ledgerEntries = entries
 }
 
 function sellerModal(title, body, footer) {
@@ -738,6 +744,10 @@ async function loadFinance() {
       </div>`).join('')
 }
 
+function exportLedgerCsv(){const rows=window._ledgerEntries||[];const csv=['type,amount,balance,note,date',...rows.map(e=>`${e.entry_type},${e.amount},${e.running_balance},"${(e.note||'').replaceAll('\"','\"\"')}",${e.created_at||''}`)].join('\n');const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob([csv],{type:'text/csv'})),download:'finance-ledger.csv'});a.click()}
+
+function renderStationComparison(data=[]){const box=document.createElement('div');box.className='bg-white border border-gray-100 rounded-xl p-5 mt-6';box.innerHTML='<h3 class="text-sm font-semibold text-gray-900 mb-3">Comparaison stations (regional manager)</h3><div class="grid md:grid-cols-3 gap-3">'+(data.stations||[]).map(s=>`<div class="border border-gray-100 rounded-lg p-3"><div class="font-semibold">${s.name}</div><div class="text-xs text-gray-500">Colis: ${s.packages||0} · Livrés: ${s.delivered||0}</div></div>`).join('')+'</div>';document.getElementById('page-dashboard').appendChild(box)}
+
 // ── Alerts ────────────────────────────────────────────────────────────────────
 const SEV_COLOR = { critical:'bg-red-100 text-red-700', high:'bg-orange-100 text-orange-700', medium:'bg-yellow-100 text-yellow-700', low:'bg-blue-100 text-blue-700' }
 
@@ -746,7 +756,7 @@ async function loadAlerts() {
   const list = document.getElementById('alerts-list')
   if (!data?.length) { list.innerHTML = '<div class="text-center py-8 text-sm text-gray-400">Aucune alerte active</div>'; return }
   list.innerHTML = `<div class="space-y-3">${data.map(a=>`
-    <div class="bg-white border border-gray-100 rounded-xl p-4 flex items-start gap-4">
+    <div class="bg-white border border-gray-100 rounded-xl p-4 flex items-start gap-4"><input type="checkbox" class="alert-check mt-2" value="${a.id}">
       <span class="badge ${SEV_COLOR[a.severity]||'bg-gray-100 text-gray-600'} mt-0.5 flex-shrink-0">${a.severity}</span>
       <div class="flex-1">
         <div class="font-semibold text-gray-900 text-sm">${a.title}</div>
@@ -756,6 +766,8 @@ async function loadAlerts() {
       <button class="btn btn-ghost text-xs" onclick="resolveAlert('${a.id}')">Résoudre</button>
     </div>`).join('')}</div>`
 }
+
+async function bulkResolveAlerts(){const ids=[...document.querySelectorAll('.alert-check:checked')].map(c=>c.value); if(!ids.length)return toast('Sélectionnez des alertes','err'); const note=prompt('Note résolution bulk:')||'Bulk resolved'; await Promise.all(ids.map(id=>api(`/api/superadmin/alerts/${id}/resolve`,{method:'PATCH',body:JSON.stringify({resolution_note:note})}))); toast('Alertes résolues'); loadAlerts(); loadDashboard()}
 
 async function resolveAlert(id) {
   const note = prompt('Note de résolution (optionnel):') || ''
@@ -922,13 +934,14 @@ async function saveEdit(id) {
 
 // ── Logout ────────────────────────────────────────────────────────────────────
 async function logout() {
-  await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{})
+  await fetch('/api/auth/logout',{method:'POST',headers:authHeaders({})}).catch(()=>{})
   localStorage.clear()
-  location.replace('/login')
+  logoutToLogin()
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 loadDashboard()
+setInterval(()=>{if(document.getElementById('dash-auto')?.checked)loadDashboard()},60000)
 </script>
 </body>
 </html>

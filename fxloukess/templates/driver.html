@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>fxloukess — Livreur</title>
+<script>tailwind={config:{darkMode:"class"}}</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif;background:#f3f4f6;max-width:600px;margin:0 auto}
   .status-badge{display:inline-flex;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600}
@@ -56,6 +59,11 @@
   <div><div class="text-lg font-bold text-red-500" id="stat-failed">0</div><div class="text-xs text-gray-400">Échecs</div></div>
 </div>
 
+<div class="bg-yellow-50 border-b border-yellow-100 px-4 py-2 text-xs text-yellow-800 flex items-center justify-between">
+  <span>File hors-ligne: <b id="offline-count">0</b> mise(s) à jour en attente</span>
+  <button onclick="flushOfflineQueue()" class="font-semibold underline">Synchroniser</button>
+</div>
+
 <!-- Package list -->
 <div class="p-3" id="pkg-list">
   <div class="flex justify-center py-12"><div class="spinner"></div></div>
@@ -67,6 +75,10 @@
     <div class="sheet-handle"></div>
     <div class="font-semibold text-gray-900 mb-0.5" id="sheet-tracking"></div>
     <div class="text-sm text-gray-500 mb-5" id="sheet-recipient"></div>
+    <div class="grid grid-cols-2 gap-2 mb-3">
+      <label class="text-xs text-gray-500">Photo POD<input id="pod-photo" type="file" accept="image/*" capture="environment" class="input mt-1"></label>
+      <label class="text-xs text-gray-500">Signature<input id="pod-signature" class="input mt-1" placeholder="Nom/signature client"></label>
+    </div>
     <button onclick="doStatus('delivered')" class="action-btn bg-green-50 hover:bg-green-100 text-green-800">
       <span class="text-xl">✓</span> Livré — COD encaissé
     </button>
@@ -87,7 +99,7 @@
 
 <script>
 const TOKEN = localStorage.getItem('token')
-if (!TOKEN) location.replace('/login')
+if (!TOKEN) console.info('Using cookie-based session')
 
 const NAME = localStorage.getItem('name') || 'Livreur'
 document.getElementById('driver-name').textContent = NAME
@@ -96,6 +108,8 @@ let allPackages = []
 let currentTab  = 'active'
 let activeId    = null
 let driverId    = null
+let offlineQueue = JSON.parse(localStorage.getItem('driver_offline_queue') || '[]')
+updateOfflineCount()
 
 const STATUS_LABEL = {
   created:'Créé', assigned:'Assigné', out_for_delivery:'En livraison',
@@ -112,9 +126,9 @@ const STATUS_CLR = {
 }
 
 function api(url, opts={}) {
-  opts.headers={'Content-Type':'application/json',Authorization:'Bearer '+TOKEN,...(opts.headers||{})}
+  opts.headers=authHeaders(opts.headers||{})
   return fetch(url,opts).then(r=>{
-    if(r.status===401){localStorage.clear();location.replace('/login')}
+    if(r.status===401){sessionExpired()}
     return r.ok ? r.json() : r.json().then(d=>{throw new Error(d.detail||'Erreur')})
   })
 }
@@ -171,6 +185,8 @@ function renderPackages() {
         <div class="flex gap-2">
           ${p.is_fragile?'<span class="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Fragile</span>':''}
           <a href="tel:${p.recipient_phone}" onclick="event.stopPropagation()" class="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium">📞 Appeler</a>
+          <a href="https://wa.me/${(p.recipient_phone||'').replace(/\D/g,'')}" target="_blank" onclick="event.stopPropagation()" class="text-xs bg-green-50 text-green-600 px-3 py-1 rounded-full font-medium">WhatsApp</a>
+          <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([p.address,p.commune,p.wilaya].filter(Boolean).join(', '))}" target="_blank" onclick="event.stopPropagation()" class="text-xs bg-gray-50 text-gray-600 px-3 py-1 rounded-full font-medium">Maps</a>
         </div>
       </div>
     </div>`).join('')
@@ -201,6 +217,11 @@ function openSheet(id) {
 
 function closeSheet() { document.getElementById('bottom-sheet').classList.add('hidden'); activeId = null }
 
+function updateOfflineCount(){document.getElementById('offline-count')&&(document.getElementById('offline-count').textContent=offlineQueue.length)}
+function queueOffline(item){offlineQueue.push(item);localStorage.setItem('driver_offline_queue',JSON.stringify(offlineQueue));updateOfflineCount();toast('Connexion faible: mise à jour gardée hors-ligne','err')}
+async function flushOfflineQueue(){const pending=[...offlineQueue];offlineQueue=[];localStorage.setItem('driver_offline_queue','[]');updateOfflineCount();for(const item of pending){try{await api(`/api/packages/${item.id}/status`,{method:'PATCH',body:JSON.stringify(item.body)})}catch(e){queueOffline(item);break}}toast('File hors-ligne synchronisée')}
+window.addEventListener('online',flushOfflineQueue)
+
 async function doStatus(status) {
   if (!activeId) return
   const NEEDS_REASON = ['failed','rescheduled','returned']
@@ -212,7 +233,10 @@ async function doStatus(status) {
     reason = reasons[status]
   }
   try {
-    await api(`/api/packages/${activeId}/status`,{method:'PATCH',body:JSON.stringify({status,reason})})
+    const pod = status==='delivered' ? {pod_signature:document.getElementById('pod-signature')?.value||null,pod_photo_name:document.getElementById('pod-photo')?.files?.[0]?.name||null} : {}
+    const body = {status,reason,...pod}
+    if(!navigator.onLine){queueOffline({id:activeId,body}); closeSheet(); return}
+    await api(`/api/packages/${activeId}/status`,{method:'PATCH',body:JSON.stringify(body)})
     toast(status==='delivered'?'Livraison confirmée ✓':'Statut mis à jour')
     closeSheet()
     await loadPackages()
@@ -220,8 +244,8 @@ async function doStatus(status) {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{})
-  localStorage.clear(); location.replace('/login')
+  await fetch('/api/auth/logout',{method:'POST',headers:authHeaders({})}).catch(()=>{})
+  logoutToLogin()
 }
 
 loadPackages()

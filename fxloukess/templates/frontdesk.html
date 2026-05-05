@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>fxloukess — Accueil</title>
+<script>tailwind={config:{darkMode:"class"}}</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif}
   .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#6b7280;cursor:pointer;transition:all .15s}
@@ -25,7 +28,7 @@
   #content>div{display:none}#content>div.active{display:block}
 </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 dark:bg-gray-950 min-h-screen dark:text-gray-100">
 
 <aside class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col z-10">
   <div class="p-4 border-b border-gray-100 flex items-center gap-2.5">
@@ -102,7 +105,7 @@
   <div id="page-receive">
     <div class="mb-5 flex items-center justify-between">
       <div><h1 class="text-xl font-semibold text-gray-900">Réception colis</h1><p class="text-sm text-gray-500 mt-0.5">Colis en zone d'accueil à mettre en rayon</p></div>
-      <button class="btn btn-ghost" onclick="loadReceive()">Rafraîchir</button>
+      <div class="flex gap-2"><input id="scan-input" class="input w-56" placeholder="Scan barcode/QR" onkeydown="if(event.key==='Enter')scanPackage()"><button class="btn btn-ghost" onclick="loadReceive()">Rafraîchir</button></div>
     </div>
     <div class="bg-white border border-gray-100 rounded-xl overflow-hidden" id="receive-table">
       <div class="text-center py-8 text-sm text-gray-400">Chargement…</div>
@@ -164,7 +167,7 @@
         <div class="bg-white border border-gray-100 rounded-xl p-5">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-semibold text-gray-900">Historique shift</h3>
-            <span class="text-xs font-bold text-red-600" id="cash-total">0 DZD</span>
+            <div class="flex items-center gap-2"><button class="btn btn-ghost text-xs py-1 px-2" onclick="printPettyCashReceipt()">Reçu</button><span class="text-xs font-bold text-red-600" id="cash-total">0 DZD</span></div>
           </div>
           <div id="cash-list"><div class="text-sm text-gray-400 text-center py-4">Chargement…</div></div>
         </div>
@@ -176,16 +179,16 @@
 
 <script>
 const TOKEN = localStorage.getItem('token')
-if (!TOKEN) location.replace('/login')
+if (!TOKEN) console.info('Using cookie-based session')
 
 const NAME = localStorage.getItem('name') || 'FD'
 document.getElementById('user-name').textContent = NAME
 document.getElementById('user-initials').textContent = NAME.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
 
 function api(url, opts={}) {
-  opts.headers = {'Content-Type':'application/json', Authorization:'Bearer '+TOKEN, ...(opts.headers||{})}
+  opts.headers = authHeaders(opts.headers || {})
   return fetch(url, opts).then(r => {
-    if (r.status === 401) { localStorage.clear(); location.replace('/login') }
+    if (r.status === 401) { sessionExpired() }
     return r.ok ? r.json() : r.json().then(d=>{ throw new Error(d.detail||'Erreur') })
   })
 }
@@ -328,11 +331,14 @@ async function openShift() {
 }
 
 async function closeShift() {
-  if (!confirm('Fermer le shift en cours ?')) return
+  const summary = {packages:document.getElementById('sum-total').textContent, delivered:document.getElementById('sum-delivered').textContent, cod:document.getElementById('sum-cod').textContent}
+  if (!confirm(`Résumé shift:\nColis: ${summary.packages}\nLivrés: ${summary.delivered}\nCOD: ${summary.cod} DZD\n\nFermer le shift ?`)) return
   const notes = prompt('Notes de clôture (optionnel):') || ''
   try { await api('/api/frontdesk/shift/close',{method:'POST',body:JSON.stringify({notes})}); toast('Shift fermé'); loadShift() }
   catch(e) { toast(e.message,'err') }
 }
+
+function scanPackage(){const q=document.getElementById('scan-input').value.trim(); if(!q)return; nav('search'); document.getElementById('search-q').value=q; searchPkgs()}
 
 // ── Receive ───────────────────────────────────────────────────────────────────
 async function loadReceive() {
@@ -346,7 +352,7 @@ async function loadReceive() {
     el.innerHTML = '<div class="text-center py-8 text-sm text-gray-400">Aucun colis en zone d\'accueil</div>'
     return
   }
-  el.innerHTML = `<table>
+  el.innerHTML = `<div class='p-2 text-xs text-gray-400'>Pagination: affichage des 50 premiers colis, utilisez la recherche/scan pour filtrer.</div><table>
     <thead><tr><th>Tracking</th><th>Destinataire</th><th>Wilaya</th><th>COD</th><th>Fragile</th><th>Action</th></tr></thead>
     <tbody>${data.map(p=>`
       <tr>
@@ -366,6 +372,8 @@ async function shelve(id) {
 }
 
 // ── Petty Cash ────────────────────────────────────────────────────────────────
+async function printPettyCashReceipt(){const html=`<h2>Reçu petite caisse</h2><p>Total: ${document.getElementById('cash-total').textContent}</p><div>${document.getElementById('cash-list').innerHTML}</div>`;const w=open('','_blank');w.document.write(html);w.print()}
+
 async function loadCash() {
   const data = await api('/api/frontdesk/petty-cash')
   const total = data.reduce((s,e)=>s+e.amount, 0)
@@ -400,8 +408,8 @@ async function saveCash() {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{})
-  localStorage.clear(); location.replace('/login')
+  await fetch('/api/auth/logout',{method:'POST',headers:authHeaders({})}).catch(()=>{})
+  logoutToLogin()
 }
 
 loadShift()
