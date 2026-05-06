@@ -151,7 +151,6 @@ def _audit(db: Session, *, action: str, request: Request,
 @router.post("/login")
 @limiter.limit(LOGIN_RATE_LIMIT)
 async def login(request: Request, db: Session = Depends(get_db)):
-    await request.app.state.limiter._check_request_limit(request, LOGIN_RATE_LIMIT)
     body = await request.json()
     phone    = (body.get("phone") or "").strip()
     password = (body.get("password") or "").strip()
@@ -171,6 +170,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Compte désactivé")
 
     token = _make_token(user)
+    csrf_token = secrets.token_hex(32)  # Fix: generate csrf_token before it's used below
     session = UserSession(
         user_id=user.id,
         token=token,
