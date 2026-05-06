@@ -3,6 +3,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# =========================
+# Helpers
+# =========================
+def _env_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _cookie_samesite(value: str | None = None) -> str:
+    if not value:
+        return "lax"
+    normalized = value.strip().lower()
+    return normalized if normalized in {"lax", "strict", "none"} else "lax"
+
+
+def _cookie_path(value: str | None = None) -> str:
+    if not value:
+        return "/"
+    normalized = value.strip()
+    return normalized if normalized.startswith("/") else "/"
+
+
+def _cors_origins(value: str | None = None) -> list[str]:
+    if not value:
+        return ["http://localhost:3000", "http://127.0.0.1:3000"]
+    origins = [v.strip() for v in value.split(",") if v.strip()]
+    return origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
+
+
 # ── Database ──────────────────────────────────────────────────────────────────
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",
@@ -20,6 +50,17 @@ DRIVER_TOKEN_EXPIRE_DAYS    = 365       # Drivers get long-lived tokens
 
 # Rate limiting (login)
 LOGIN_RATE_LIMIT = "10/minute"
+
+# CORS (comma-separated origins; default is local dev only)
+CORS_ORIGINS: list[str] = _cors_origins(os.getenv("CORS_ORIGINS"))
+COOKIE_SAMESITE: str = _cookie_samesite(os.getenv("COOKIE_SAMESITE"))
+COOKIE_SECURE: bool = _env_bool(os.getenv("COOKIE_SECURE"), default=False)
+CSRF_PROTECT: bool = _env_bool(os.getenv("CSRF_PROTECT"), default=True)
+COOKIE_PATH: str = _cookie_path(os.getenv("COOKIE_PATH"))
+
+if COOKIE_SAMESITE == "none":
+    COOKIE_SECURE = True
+
 
 # ── Station ───────────────────────────────────────────────────────────────────
 STATION_CODE: str = os.getenv("STATION_CODE", "ORA")

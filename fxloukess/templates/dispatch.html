@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>fxloukess — Dispatch</title>
+<script>tailwind={config:{darkMode:"class"}}</script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
 <style>
   body{font-family:system-ui,-apple-system,sans-serif}
   .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#6b7280;cursor:pointer;transition:all .15s}
@@ -25,7 +28,7 @@
   #content>div{display:none}#content>div.active{display:block}
 </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 dark:bg-gray-950 min-h-screen dark:text-gray-100">
 
 <aside class="fixed left-0 top-0 h-full w-52 bg-white border-r border-gray-100 flex flex-col z-10">
   <div class="p-4 border-b border-gray-100 flex items-center gap-2.5">
@@ -75,7 +78,7 @@
         <select class="select" id="driver-select">
           <option value="">Choisir un livreur…</option>
         </select>
-        <button class="btn btn-green" onclick="assignSelected()">Assigner</button>
+        <button class="btn btn-blue" onclick="open('/labels','_blank')">Imprimer labels</button><button class="btn btn-green" onclick="assignSelected()">Assigner</button>
       </div>
     </div>
 
@@ -99,7 +102,7 @@
 
 <script>
 const TOKEN = localStorage.getItem('token')
-if (!TOKEN) location.replace('/login')
+if (!TOKEN) console.info('Using cookie-based session')
 
 const NAME = localStorage.getItem('name') || 'DP'
 document.getElementById('user-name').textContent = NAME
@@ -108,9 +111,9 @@ document.getElementById('user-initials').textContent = NAME.split(' ').map(w=>w[
 let selected = new Set()
 
 function api(url, opts={}) {
-  opts.headers = {'Content-Type':'application/json', Authorization:'Bearer '+TOKEN, ...(opts.headers||{})}
+  opts.headers = authHeaders(opts.headers || {})
   return fetch(url,opts).then(r=>{
-    if (r.status===401){localStorage.clear();location.replace('/login')}
+    if (r.status===401){sessionExpired()}
     return r.ok ? r.json() : r.json().then(d=>{throw new Error(d.detail||'Erreur')})
   })
 }
@@ -149,7 +152,7 @@ async function loadAssign() {
 
   const sel = document.getElementById('driver-select')
   sel.innerHTML = '<option value="">Choisir un livreur…</option>' +
-    (drivers||[]).filter(d=>d.is_active).map(d=>`<option value="${d.id}">${d.full_name} — ${d.wilaya}</option>`).join('')
+    (drivers||[]).filter(d=>d.is_active).map(d=>`<option value="${d.id}">${d.full_name} — ${d.wilaya} (${d.packages_out||0}/40)</option>`).join('')
 
   const list = document.getElementById('ready-list')
   if (!pkgs?.length) {
@@ -268,7 +271,7 @@ async function loadBags() {
         </div>
       </div>
       <div class="grid grid-cols-3 gap-2 text-center mb-4">
-        <div class="bg-purple-50 rounded-lg p-2"><div class="text-xs text-gray-400">Sac</div><div class="font-bold text-purple-700">${d.packages_out}</div></div>
+        <div class="bg-purple-50 rounded-lg p-2"><div class="text-xs text-gray-400">Capacité</div><div class="font-bold text-purple-700">${d.packages_out||0}/40</div><div class="h-1 bg-purple-100 rounded mt-1"><div class="h-1 bg-purple-500 rounded" style="width:${Math.min(100,((d.packages_out||0)/40)*100)}%"></div></div></div>
         <div class="bg-green-50 rounded-lg p-2"><div class="text-xs text-gray-400">Livrés</div><div class="font-bold text-green-700">${d.delivered_today}</div></div>
         <div class="bg-orange-50 rounded-lg p-2"><div class="text-xs text-gray-400">Cash</div><div class="font-bold text-orange-700 text-xs">${(d.cash_on_hand||0).toLocaleString()}</div></div>
       </div>
@@ -296,7 +299,7 @@ async function showBag(driverId) {
 }
 
 async function confirmDepart(id, name) {
-  if (!confirm(`Confirmer le départ de ${name} ?`)) return
+  if (!confirm(`Confirmer le départ du sac de ${name} ? Vérifiez que tous les colis ont été scannés.`)) return
   try {
     const res = await api(`/api/dispatch/driver/${id}/depart`,{method:'POST'})
     toast(`${res.count} colis mis en livraison`)
@@ -305,8 +308,8 @@ async function confirmDepart(id, name) {
 }
 
 async function logout() {
-  await fetch('/api/auth/logout',{method:'POST',headers:{Authorization:'Bearer '+TOKEN}}).catch(()=>{})
-  localStorage.clear(); location.replace('/login')
+  await fetch('/api/auth/logout',{method:'POST',headers:authHeaders({})}).catch(()=>{})
+  logoutToLogin()
 }
 
 loadAssign()

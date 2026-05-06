@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>fxloukess — Connexion</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind={config:{darkMode:"class"}}</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/style.css">
+<script src="/static/app.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; }
     .shake { animation: shake .4s ease; }
@@ -133,7 +136,7 @@
           return
         }
 
-        localStorage.setItem('token', data.token)
+        if (data.token) localStorage.setItem('token', data.token)
         localStorage.setItem('role',  data.role)
         localStorage.setItem('name',  data.name)
         localStorage.setItem('station_id', data.station_id || '')
@@ -145,6 +148,7 @@
           dispatch:         '/dispatch',
           returns:          '/returns',
           driver:           '/driver',
+          seller:           '/seller',
         }
         window.location.href = pages[data.role] || '/superadmin'
       } catch {

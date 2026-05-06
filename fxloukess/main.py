@@ -7,10 +7,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
+from config import CORS_ORIGINS
 from database import check_connection, create_tables
 
 logging.basicConfig(
@@ -22,8 +22,6 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("fxloukess")
-
-limiter = Limiter(key_func=get_remote_address)
 
 for d in ["static/css", "static/js", "templates", "photos", "prints", "logs"]:
     os.makedirs(d, exist_ok=True)
@@ -49,11 +47,10 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,6 +85,12 @@ async def driver_page():     return _html("driver.html")
 async def manager_page():    return _html("superadmin.html")
 @app.get("/track",      include_in_schema=False)
 async def track_page():      return _html("track.html")
+@app.get("/seller",     include_in_schema=False)
+async def seller_page():     return _html("seller.html")
+@app.get("/labels",     include_in_schema=False)
+async def labels_page():     return _html("labels.html")
+@app.get("/session-expired", include_in_schema=False)
+async def session_expired_page(): return _html("session_expired.html")
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -99,12 +102,20 @@ async def health():
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.exception_handler(404)
-async def not_found(_: Request, exc):
+async def not_found(request: Request, exc):
+    if "text/html" in request.headers.get("accept", ""):
+        response = _html("404.html")
+        response.status_code = 404
+        return response
     return JSONResponse(status_code=404, content={"detail": "Ressource introuvable"})
 
 @app.exception_handler(500)
 async def server_error(request: Request, exc: Exception):
     logger.error(f"500 {request.url}: {exc}", exc_info=True)
+    if "text/html" in request.headers.get("accept", ""):
+        response = _html("error.html")
+        response.status_code = 500
+        return response
     return JSONResponse(status_code=500, content={"detail": "Erreur serveur interne"})
 
 
@@ -112,6 +123,7 @@ async def server_error(request: Request, exc: Exception):
 from routers import auth, dispatch, drivers, frontdesk, packages, returns, sellers, superadmin
 from routers import reports, labels
 
+app.state.limiter = auth.limiter
 app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
 app.include_router(packages.router,   prefix="/api/packages",   tags=["packages"])
 app.include_router(drivers.router,    prefix="/api/drivers",    tags=["drivers"])
