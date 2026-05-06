@@ -12,21 +12,21 @@ def _env_bool(value: str | None, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def _cookie_samesite(value: str | None = None) -> str:
+def _cookie_samesite(value: str | None) -> str:
     if not value:
         return "lax"
     normalized = value.strip().lower()
     return normalized if normalized in {"lax", "strict", "none"} else "lax"
 
 
-def _cookie_path(value: str | None = None) -> str:
+def _cookie_path(value: str | None) -> str:
     if not value:
         return "/"
     normalized = value.strip()
     return normalized if normalized.startswith("/") else "/"
 
 
-def _cors_origins(value: str | None = None) -> list[str]:
+def _cors_origins(value: str | None) -> list[str]:
     if not value:
         return ["http://localhost:3000", "http://127.0.0.1:3000"]
     origins = [v.strip() for v in value.split(",") if v.strip()]
@@ -60,6 +60,18 @@ COOKIE_PATH: str = _cookie_path(os.getenv("COOKIE_PATH"))
 
 if COOKIE_SAMESITE == "none":
     COOKIE_SECURE = True
+CORS_ORIGINS: list[str] = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+    if origin.strip()
+]
+
+# Cookie security
+COOKIE_SECURE: bool = _env_bool("COOKIE_SECURE", True)
+CSRF_PROTECT: bool = _env_bool("CSRF_PROTECT", True)
+COOKIE_SAMESITE: str = _cookie_samesite()
+COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/").strip() or "/"
+COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
 
 # ── Station ───────────────────────────────────────────────────────────────────
