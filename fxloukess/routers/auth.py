@@ -197,11 +197,9 @@ async def login(request: Request, db: Session = Depends(get_db)):
         key="token", value=token,
         httponly=True, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
     )
-    csrf_token = secrets.token_urlsafe(24)
     response.set_cookie(
         key="csrf_token", value=csrf_token,
         httponly=False, secure=COOKIE_SECURE, samesite=COOKIE_SAMESITE, max_age=max_age, path=COOKIE_PATH,
-        httponly=True, secure=COOKIE_SECURE, samesite="lax", max_age=max_age,
     )
     return response
 

@@ -69,7 +69,7 @@ CORS_ORIGINS: list[str] = [
 # Cookie security
 COOKIE_SECURE: bool = _env_bool("COOKIE_SECURE", True)
 CSRF_PROTECT: bool = _env_bool("CSRF_PROTECT", True)
-COOKIE_SAMESITE: str = _cookie_samesite()
+
 COOKIE_PATH: str = os.getenv("COOKIE_PATH", "/").strip() or "/"
 COOKIE_SECURE: bool = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 
